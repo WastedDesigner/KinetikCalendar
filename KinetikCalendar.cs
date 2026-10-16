@@ -24,11 +24,11 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Kinetik Calendar")]
 [assembly: AssemblyProduct("Kinetik Calendar")]
 [assembly: AssemblyCopyright("Copyright © 2026 Akila Sella Hennedige")]
-[assembly: AssemblyVersion("1.1.4.0")]
+[assembly: AssemblyVersion("1.1.5.0")]
 
 static class Program
 {
-    public const string Version = "1.1.4";
+    public const string Version = "1.1.5";
     public static bool Demo; // --demo: made-up calendars, nothing read from or saved to this PC
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
 
@@ -446,10 +446,12 @@ static class Net
         var req = (HttpWebRequest)WebRequest.Create(Normalise(url));
         req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KinetikCalendar/" + Program.Version;
         req.Timeout = 30000; req.ReadWriteTimeout = 30000;
-        req.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+        req.AutomaticDecompression = DecompressionMethods.GZip;
         if (!string.IsNullOrEmpty(etag)) req.Headers["If-None-Match"] = etag;
         DateTime lm;
         if (!string.IsNullOrEmpty(modified) && DateTime.TryParse(modified, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out lm)) req.IfModifiedSince = lm;
+        using (var deadline = new CancellationTokenSource(30000))
+        using (deadline.Token.Register(req.Abort))
         try
         {
             using (var resp = (HttpWebResponse)req.GetResponse())
@@ -457,7 +459,15 @@ static class Net
             {
                 etag = resp.Headers["ETag"];
                 modified = resp.Headers["Last-Modified"];
-                var text = rd.ReadToEnd();
+                if (resp.ContentLength > 16 * 1024 * 1024) throw new IOException("Calendar download exceeds 16 MB.");
+                var content = new StringBuilder(); var buffer = new char[8192]; int read;
+                while ((read = rd.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    deadline.Token.ThrowIfCancellationRequested();
+                    if (content.Length + read > 8 * 1024 * 1024) throw new IOException("Calendar download exceeds 8 million characters.");
+                    content.Append(buffer, 0, read);
+                }
+                var text = content.ToString();
                 if (text.IndexOf("BEGIN:VCALENDAR", StringComparison.OrdinalIgnoreCase) < 0) throw new Exception("That link didn't return a calendar");
                 return text;
             }
@@ -465,7 +475,12 @@ static class Net
         catch (WebException we)
         {
             var r = we.Response as HttpWebResponse;
-            if (r != null && r.StatusCode == HttpStatusCode.NotModified) return null;
+            if (r != null)
+            {
+                bool unchanged = r.StatusCode == HttpStatusCode.NotModified;
+                r.Close();
+                if (unchanged) return null;
+            }
             throw;
         }
     }
@@ -1334,19 +1349,19 @@ class CalApp : ApplicationContext
 
     void OnPower(object s, PowerModeChangedEventArgs e)
     {
-        if (e.Mode == PowerModes.Resume) ui.BeginInvoke((Action)(() => { ArmMinute(); ScheduleSync(15000); })); // give the network a moment to come back
+        if (e.Mode == PowerModes.Resume) KinetikSuite.Ui.Post(ui, () => { ArmMinute(); ScheduleSync(15000); }); // give the network a moment to come back
     }
 
-    void OnDisplay(object s, EventArgs e) { ui.BeginInvoke((Action)(() => Widget.Render(true))); }
+    void OnDisplay(object s, EventArgs e) { KinetikSuite.Ui.Post(ui, () => Widget.Render(true)); }
 
     // Nothing redraws while the PC is locked; it catches up on unlock.
     void OnSession(object s, SessionSwitchEventArgs e)
     {
-        ui.BeginInvoke((Action)(() =>
+        KinetikSuite.Ui.Post(ui, () =>
         {
             if (e.Reason == SessionSwitchReason.SessionLock) { locked = true; minute.Stop(); }
             else if (e.Reason == SessionSwitchReason.SessionUnlock) { locked = false; Minute(); }
-        }));
+        });
     }
 
     void Minute()
