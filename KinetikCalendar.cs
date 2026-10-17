@@ -2234,6 +2234,11 @@ class WidgetForm : Form
 {
     [StructLayout(LayoutKind.Sequential)] struct WINDOWPOS { public IntPtr hwnd, hwndInsertAfter; public int x, y, cx, cy; public uint flags; }
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern IntPtr GetShellWindow();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+    readonly System.Windows.Forms.Timer guard = new System.Windows.Forms.Timer { Interval = 400 };
+    bool aboveDesktop; // true while the desktop is showing, so the card rides on top of the wallpaper instead of sinking
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);
@@ -2281,7 +2286,7 @@ class WidgetForm : Form
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == 0x21) { m.Result = (IntPtr)3; return; } // WM_MOUSEACTIVATE → MA_NOACTIVATE: clicking it never steals focus
-        if (m.Msg == 0x46 && Layer == 0) // WM_WINDOWPOSCHANGING: "on the desktop" keeps it underneath every other window
+        if (m.Msg == 0x46 && Layer == 0 && !aboveDesktop) // WM_WINDOWPOSCHANGING: "on the desktop" keeps it underneath every other window
         {
             var wp = (WINDOWPOS)Marshal.PtrToStructure(m.LParam, typeof(WINDOWPOS));
             if ((wp.flags & 0x4) == 0) { wp.hwndInsertAfter = new IntPtr(1); Marshal.StructureToPtr(wp, m.LParam, false); }
@@ -2289,10 +2294,45 @@ class WidgetForm : Form
         base.WndProc(ref m);
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        guard.Tick += (s, ev) => GuardTick();
+        guard.Start();
+    }
+
+    // Show Desktop (Win+D, or the button at the end of the taskbar) brings the desktop window in front of every
+    // normal window, and "on the desktop" pins the card to the very bottom, so it disappears together with the
+    // wallpaper. While the desktop is actually in front, let the card ride on top of it; as soon as a real
+    // window takes the foreground again it drops back to the bottom, exactly where it was.
+    void GuardTick()
+    {
+        if (IsDisposed || !IsHandleCreated || Layer != 0) return;
+        try
+        {
+            var fg = GetForegroundWindow();
+            if (fg == IntPtr.Zero) return;
+            var sb = new StringBuilder(64);
+            GetClassName(fg, sb, 64);
+            string cls = sb.ToString();
+            bool desktop = fg == GetShellWindow() || cls == "Progman" || cls == "WorkerW";
+            if (desktop == aboveDesktop) return;
+            aboveDesktop = desktop;
+            if (desktop)
+                SetWindowPos(Handle, new IntPtr(-1), 0, 0, 0, 0, 0x1 | 0x2 | 0x10 | 0x200); // HWND_TOPMOST while the desktop shows
+            else
+            {
+                SetWindowPos(Handle, new IntPtr(-2), 0, 0, 0, 0, 0x1 | 0x2 | 0x10 | 0x200); // HWND_NOTOPMOST
+                SetWindowPos(Handle, new IntPtr(1), 0, 0, 0, 0, 0x1 | 0x2 | 0x10);          // and back to the bottom
+            }
+        }
+        catch { }
+    }
+
     protected override void Dispose(bool disposing)
     {
         surface.Dispose();
-        if (disposing) { anim.Dispose(); P.Dispose(); }
+        if (disposing) { guard.Stop(); guard.Dispose(); anim.Dispose(); P.Dispose(); }
         base.Dispose(disposing);
     }
 
@@ -2581,7 +2621,7 @@ class WidgetForm : Form
         if (!Visible || alpha > 0)
         {
             ShowWindow(Handle, 8); // SW_SHOWNA
-            if (Layer == 0) SetWindowPos(Handle, new IntPtr(1), 0, 0, 0, 0, 0x1 | 0x2 | 0x10);       // bottom of the pile
+            if (Layer == 0) { if (!aboveDesktop) SetWindowPos(Handle, new IntPtr(1), 0, 0, 0, 0, 0x1 | 0x2 | 0x10); } // bottom of the pile
             else if (Layer == 2) SetWindowPos(Handle, new IntPtr(-1), 0, 0, 0, 0, 0x1 | 0x2 | 0x10); // stay on top
         }
     }
