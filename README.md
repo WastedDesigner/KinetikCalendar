@@ -60,7 +60,7 @@ Make it yours:
 - **Calendar:** this month, this week, or hidden, with optional week numbers, weekend shading and any first day of the week
 - **Event markers:** a coloured bar, a dot, a tinted card, or none
 - **Spacing:** compact, comfortable or roomy
-- **Font, size, width, background opacity, corner roundness, shadow and outline**
+- **Font, size, width, background opacity, text opacity, corner roundness, shadow and outline**
 - **What's listed:** all-day events, finished events, empty days, events per day, times, durations, locations, countdowns and progress bars, 12 or 24-hour time
 
 <br clear="right">

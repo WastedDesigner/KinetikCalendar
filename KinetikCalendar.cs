@@ -143,6 +143,7 @@ class Settings
 {
     const string KeyPath = @"Software\KinetikCalendar";
     public int X = int.MinValue, Y = int.MinValue, Width = 320, Scale = 100, Opacity = CommonMenu.DefaultOpacity, Round = 100, Days = 7, Layer = 0, SyncMin = 15, MaxHeight = 0; // MaxHeight 0 = as tall as the screen allows
+    public int TextOpacity = CommonMenu.DefaultTextOpacity; // 0-100: text, numbers and the today mark; the card keeps its own Opacity
     public bool Locked, Snap = true, Shadow = true, Border = true, ClickThrough, Animate = true, ClickOpens = true;
     public string ThemeName = "Midnight", FontName = "";
     public int Accent, BgColor; // ARGB; 0 means the theme's own
@@ -168,7 +169,7 @@ class Settings
 
     static readonly string[] LookFields =
     {
-        "Width", "MaxHeight", "Scale", "Opacity", "Round", "Shadow", "Border", "ThemeName", "FontName", "Accent", "BgColor",
+        "Width", "MaxHeight", "Scale", "Opacity", "TextOpacity", "Round", "Shadow", "Border", "ThemeName", "FontName", "Accent", "BgColor",
         "Density", "Marker", "MonthStyle", "FirstDay", "TitleStyle", "WeekNumbers", "ShadeWeekends",
     };
 
@@ -1462,6 +1463,7 @@ class CalApp : ApplicationContext
             Widths = new[] { 280, 320, 400 }, CardWidth = () => Cfg.Width, SetCardWidth = v => { Cfg.Width = v; Apply(true); },
             FontName = () => Cfg.FontName, SetFontName = v => { Cfg.FontName = v; Apply(true); },
             Opacity = () => Cfg.Opacity, SetOpacity = v => { Cfg.Opacity = v; Apply(false); },
+        TextOpacity = () => Cfg.TextOpacity, SetTextOpacity = v => { Cfg.TextOpacity = v; Apply(false); },
             Layer = () => Cfg.Layer, SetLayer = v => { Cfg.Layer = v; Cfg.Save(); RecreateWidget(); },
             Locked = () => Cfg.Locked, SetLocked = v => { Cfg.Locked = v; Apply(false); },
             ClickThrough = () => Cfg.ClickThrough, SetClickThrough = v => { Cfg.ClickThrough = v; Apply(false); },
@@ -1829,6 +1831,7 @@ class Painter : IDisposable
 
     // ---- painting
     Bitmap layer;
+    int ink = 255; // text alpha 0-255, kept apart from the card's own alpha
 
     public void Paint(Graphics target)
     {
@@ -1840,6 +1843,7 @@ class Painter : IDisposable
         NavPrev = NavNext = NavToday = GridArea = RectangleF.Empty;
 
         int alpha = (int)Math.Round(c.Opacity * 2.55);
+        ink = (int)Math.Round(Math.Max(0, Math.Min(100, c.TextOpacity)) * 2.55);
         float cardH = DrawCardH > 0 ? DrawCardH : CardH;
         var card = new RectangleF(Margin, Margin, CardW, cardH);
         float rad = Math.Min(card.Height / 2, 12 * U * c.Round / 100f);
@@ -1848,8 +1852,8 @@ class Painter : IDisposable
 
         // ClearType needs solid pixels behind the text. So for a mostly opaque card, the card is drawn solid with ClearType text
         // and then faded to the card's opacity as a whole: by the widget window itself (PushAlpha, free), or else by blending
-        // a layer in (a few ms a frame). A very see-through card keeps grayscale text.
-        bool crisp = alpha >= 150, byWindow = crisp && WindowAlpha;
+        // a layer in (a few ms a frame). A very see-through card, or faded text, keeps grayscale text.
+        bool crisp = alpha >= 150 && ink >= 255, byWindow = crisp && WindowAlpha;
         PushAlpha = byWindow ? alpha : 255;
         int shadowA = byWindow ? 255 : alpha; // the window's fade then brings it to the same strength
         if (Margin > 1) // soft shadow: stacked, slightly larger translucent shapes
@@ -1936,6 +1940,11 @@ class Painter : IDisposable
         return (1 - t) * 10 * U;
     }
 
+    // Text opacity is kept apart from the card's: only the ink's own alpha is scaled, so the card can stay
+    // solid while the text fades, or the other way round. ClearType needs a solid card, so faded text falls
+    // back to grayscale anti-aliasing (see the crisp test in Paint).
+    Color Ink(Color c) { int a = c.A * ink / 255; return a == c.A ? c : Color.FromArgb(a, c); }
+
     void PaintRow(Graphics g, Row it, float x0, float x1, float y, RectangleF card)
     {
         switch (it.Kind)
@@ -1945,12 +1954,12 @@ class Painter : IDisposable
             {
                 float ty = y + it.H - 16 * U;
                 var hsz = g.MeasureString(it.Label, fHead, PointF.Empty, Typo);
-                brush.Color = it.Today || it.Picked ? Th.Accent : Th.Sub;
+                brush.Color = Ink(it.Today || it.Picked ? Th.Accent : Th.Sub);
                 g.DrawString(it.Label, fHead, brush, x0, ty, Typo);
                 if (!string.IsNullOrEmpty(it.Sub))
                 {
                     var ssz = g.MeasureString(it.Sub, fSmall, PointF.Empty, Typo);
-                    brush.Color = Color.FromArgb(215, Th.Sub);
+                    brush.Color = Ink(Color.FromArgb(215, Th.Sub));
                     g.DrawString(it.Sub, fSmall, brush, x1 - ssz.Width, ty + (hsz.Height - ssz.Height) / 2, Typo);
                     using (var p = new Pen(Th.Line, 1)) // a hairline between the heading and the date, like a ruled diary
                         g.DrawLine(p, x0 + hsz.Width + 8 * U, ty + hsz.Height / 2, x1 - ssz.Width - 8 * U, ty + hsz.Height / 2);
@@ -1960,21 +1969,21 @@ class Painter : IDisposable
             case 2:
             {
                 float sw = Status(g, it, x1, y, 22 * U);
-                brush.Color = Th.Text;
+                brush.Color = Ink(Th.Text);
                 g.DrawString(it.Label, fTitle, brush, new RectangleF(x0, y, Math.Max(1, x1 - x0 - sw - 8 * U), 22 * U), Trim);
                 break;
             }
             case 5:
             {
                 var tsz = g.MeasureString(it.Label, fClock, PointF.Empty, Typo);
-                brush.Color = Th.Text;
+                brush.Color = Ink(Th.Text);
                 g.DrawString(it.Label, fClock, brush, x0 - 2 * U, y - 4 * U, Typo);
                 if (it.Value != null)
                 {
-                    brush.Color = Th.Sub;
+                    brush.Color = Ink(Th.Sub);
                     g.DrawString(it.Value, fClockSub, brush, x0 + tsz.Width + 2 * U, y + tsz.Height - 24 * U, Typo);
                 }
-                brush.Color = Th.Accent;
+                brush.Color = Ink(Th.Accent);
                 g.DrawString(it.Extra, fValue, brush, new RectangleF(x0, y + 40 * U, x1 - x0, 18 * U), Trim);
                 Status(g, it, x1, y, 22 * U);
                 break;
@@ -1982,7 +1991,7 @@ class Painter : IDisposable
             case 3: PaintMonth(g, x0, x1, y, false); break;
             case 6: PaintMonth(g, x0, x1, y, true); break;
             default:
-                brush.Color = Th.Sub;
+                brush.Color = Ink(Th.Sub);
                 g.DrawString(it.Label, fLabel, brush, new RectangleF(x0, y, x1 - x0, 20 * U), Trim);
                 break;
         }
@@ -2001,7 +2010,7 @@ class Painter : IDisposable
         }
         if (it.Sub == null) return 0;
         var ssz = g.MeasureString(it.Sub, fSmall, PointF.Empty, Typo);
-        brush.Color = it.Warn ? Color.FromArgb(255, 170, 60) : Th.Sub;
+        brush.Color = Ink(it.Warn ? Color.FromArgb(255, 170, 60) : Th.Sub);
         g.DrawString(it.Sub, fSmall, brush, x1 - ssz.Width, y + (h - ssz.Height) / 2, Typo);
         return ssz.Width;
     }
@@ -2048,15 +2057,15 @@ class Painter : IDisposable
         }
 
         var vsz = g.MeasureString(r.Value ?? "", fValue, PointF.Empty, Typo);
-        brush.Color = r.Now || r.Soon ? (c.Marker == 3 ? Th.Accent : col) : r.Dim ? Color.FromArgb(150, Th.Sub) : Th.Text;
+        brush.Color = Ink(r.Now || r.Soon ? (c.Marker == 3 ? Th.Accent : col) : r.Dim ? Color.FromArgb(150, Th.Sub) : Th.Text);
         g.DrawString(r.Value ?? "", fValue, brush, x1 - vsz.Width, y + (lineH - vsz.Height) / 2, Typo);
-        brush.Color = Color.FromArgb(r.Dim ? 140 : 240, Th.Text);
+        brush.Color = Ink(Color.FromArgb(r.Dim ? 140 : 240, Th.Text));
         g.DrawString(r.Label, r.Now ? fValue : fLabel, brush, new RectangleF(lx, y, Math.Max(1, x1 - vsz.Width - 10 * U - lx), lineH), Trim);
 
         float yy = y + lineH;
         if (r.Sub != null)
         {
-            brush.Color = Color.FromArgb(r.Dim ? 130 : 255, Th.Sub);
+            brush.Color = Ink(Color.FromArgb(r.Dim ? 130 : 255, Th.Sub));
             g.DrawString(r.Sub, fSmall, brush, new RectangleF(lx, yy - 4 * U, Math.Max(1, x1 - lx), SubH), Trim);
             yy += SubH;
         }
@@ -2109,7 +2118,7 @@ class Painter : IDisposable
         string label = weekOnly
             ? (ViewOffset == 0 ? "This week" : ViewOffset == 1 ? "Next week" : ViewOffset == -1 ? "Last week" : "Week of " + anchor.ToString("d MMM"))
             : anchor.Year == DateTime.Today.Year ? anchor.ToString("MMMM") : anchor.ToString("MMMM yyyy");
-        brush.Color = ViewOffset == 0 ? Th.Text : Th.Accent;
+        brush.Color = Ink(ViewOffset == 0 ? Th.Text : Th.Accent);
         g.DrawString(label, fValue, brush, new RectangleF(x0, y, x1 - x0 - 90 * U, 18 * U), Trim);
 
         float bw = 22 * U, bh = 20 * U, by = y - 1 * U;
@@ -2121,7 +2130,7 @@ class Painter : IDisposable
             float tw = g.MeasureString("Today", fSmall, PointF.Empty, Typo).Width + 14 * U;
             NavToday = new RectangleF(NavPrev.X - tw - 6 * U, by + 1 * U, tw, bh - 2 * U);
             Draw.Fill(g, NavToday, NavToday.Height / 2, Color.FromArgb(HoverNav == 2 ? 70 : 40, Th.Accent));
-            brush.Color = Th.Accent;
+            brush.Color = Ink(Th.Accent);
             g.DrawString("Today", fSmall, brush, NavToday, Center);
         }
         var hover = Color.FromArgb(Th.Light ? 16 : 24, Th.Text);
@@ -2164,12 +2173,12 @@ class Painter : IDisposable
             if (c.ShadeWeekends && (dow == DayOfWeek.Saturday || dow == DayOfWeek.Sunday))
                 Draw.Fill(g, new RectangleF(cx0 + 2 * U, y - 2 * U, cw - 4 * U, 18 * U + rh * weeks + 2 * U), 7 * U, Color.FromArgb(Th.Light ? 9 : 10, Th.Text));
             var name = dtf.GetShortestDayName(dow);
-            brush.Color = Color.FromArgb(215, Th.Sub);
+            brush.Color = Ink(Color.FromArgb(215, Th.Sub));
             g.DrawString(name.Substring(0, Math.Min(2, name.Length)), fHead, brush, new RectangleF(cx0, y, cw, 14 * U), Center);
         }
         if (wn > 0)
         {
-            brush.Color = Color.FromArgb(150, Th.Sub);
+            brush.Color = Ink(Color.FromArgb(150, Th.Sub));
             g.DrawString("Wk", fHead, brush, new RectangleF(x0, y, wn, 14 * U), Center);
         }
         float pop = Draw.Back(Appear * 1.4f - 0.3f);
@@ -2178,7 +2187,7 @@ class Painter : IDisposable
             if (wn > 0)
             {
                 int wk = CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(start.AddDays(w * 7 + 3), CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
-                brush.Color = Color.FromArgb(150, Th.Sub);
+                brush.Color = Ink(Color.FromArgb(150, Th.Sub));
                 g.DrawString(wk.ToString(), fSmall, brush, new RectangleF(x0, top + rh * w, wn, 18 * U), Center);
             }
             for (int i = 0; i < 7; i++)
@@ -2204,7 +2213,7 @@ class Painter : IDisposable
                         if (gb.Width > 0) { ccx = gb.X + gb.Width / 2; ccy = gb.Y + gb.Height / 2; }
                     }
                     float rr = 10 * U * pop;
-                    if (isToday && rr > 0.5f) using (var b = new SolidBrush(Th.Accent)) g.FillEllipse(b, ccx - rr, ccy - rr, rr * 2, rr * 2);
+                    if (isToday && rr > 0.5f) using (var b = new SolidBrush(Color.FromArgb(ink, Th.Accent))) g.FillEllipse(b, ccx - rr, ccy - rr, rr * 2, rr * 2);
                     if (picked) // the clicked day gets a ring
                     {
                         float pr = isToday ? 12 * U : 10 * U;
@@ -2212,7 +2221,7 @@ class Painter : IDisposable
                     }
                 }
                 bool accentLight = Th.Accent.GetBrightness() > 0.7f;
-                brush.Color = isToday ? (accentLight ? Color.FromArgb(20, 20, 24) : Color.White) : !inMonth ? Color.FromArgb(70, Th.Sub) : day < today ? Th.Sub : Th.Text;
+                brush.Color = Ink(isToday ? (accentLight ? Color.FromArgb(20, 20, 24) : Color.White) : !inMonth ? Color.FromArgb(70, Th.Sub) : day < today ? Th.Sub : Th.Text);
                 g.DrawString(day.Day.ToString(), isToday ? fDayBold : fDay, brush, new RectangleF(cx - cw / 2, cy - 9 * U, cw, 18 * U), Center);
                 List<Color> cols;
                 if (!isToday && dayColors.TryGetValue(day, out cols)) // a dot for each calendar with something on
@@ -3481,6 +3490,7 @@ class SettingsForm : Form
         Slide("width", "Width", null, 220, 700, c.Width, v => v + " px", v => c.Width = v);
         Slide("height", "Maximum height", "Taller agendas scroll: wheel or drag the bar", 0, 1400, c.MaxHeight, v => v < 200 ? "Fit screen" : v + " px", v => c.MaxHeight = v < 200 ? 0 : v);
         Slide("opacity", "Background opacity", null, 0, 100, c.Opacity, v => v + "%", v => c.Opacity = v);
+        Slide("text", "Text opacity", "Text and numbers only; the card keeps its own", 0, 100, c.TextOpacity, v => v + "%", v => c.TextOpacity = v);
         Slide("round", "Corner roundness", null, 0, 200, c.Round, v => v + "%", v => c.Round = v);
         Switch("shadow", "Shadow", null, c.Shadow, v => c.Shadow = v);
         Switch("border", "Outline", "A hairline around the card", c.Border, v => c.Border = v);
@@ -3885,6 +3895,7 @@ class CommonMenu
     public static readonly int[] Scales = { 80, 90, 100, 115, 125, 150 };
     public static readonly int[] Opacities = { 100, 95, 80, 65, 50, 30, 0 };
     public const int DefaultOpacity = 95;
+    public const int DefaultTextOpacity = 100;
     public static readonly string[] Fonts = { "Segoe UI Variable Text", "Segoe UI", "Bahnschrift", "Calibri", "Aptos", "Inter", "Cascadia Code", "Consolas", "Verdana", "Georgia" };
 
     // Settings saved before the shared default changed from 92% to 95% move with it; any other choice is kept.
@@ -3896,6 +3907,7 @@ class CommonMenu
     public int[] Widths; public Func<int> CardWidth; public Action<int> SetCardWidth; // optional: Narrow, Normal, Wide
     public Func<string> FontName; public Action<string> SetFontName;   // optional; "" = the default font
     public Func<int> Opacity; public Action<int> SetOpacity;
+    public Func<int> TextOpacity; public Action<int> SetTextOpacity; // optional; fades the text, not the card
     public Func<int> Layer; public Action<int> SetLayer;
     public Func<bool> Locked; public Action<bool> SetLocked;
     public Func<bool> ClickThrough; public Action<bool> SetClickThrough; // optional
@@ -3946,6 +3958,14 @@ class CommonMenu
         foreach (var o in Opacities) { int v = o; opacity.DropDownItems.Add(Item(v + "%", Opacity() == v, () => SetOpacity(v))); }
         if (!Opacities.Contains(Opacity())) opacity.DropDownItems.Add(Item(Opacity() + "%", true, () => { }));
         items.Add(opacity);
+
+        if (TextOpacity != null)
+        {
+            var text = new ToolStripMenuItem("Text opacity");
+            foreach (var o in Opacities) { int v = o; text.DropDownItems.Add(Item(v + "%", TextOpacity() == v, () => SetTextOpacity(v))); }
+            if (!Opacities.Contains(TextOpacity())) text.DropDownItems.Add(Item(TextOpacity() + "%", true, () => { }));
+            items.Add(text);
+        }
 
         var place = new ToolStripMenuItem("Placement");
         string[] layers = { "On the desktop", "Normal window", "Always on top" };
