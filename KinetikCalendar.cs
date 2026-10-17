@@ -85,6 +85,8 @@ class Feed
     public volatile List<Ics.VEvent> Parsed;
     public string Status = "Not synced yet";
     public bool Failed, Changed;
+    public int SyncMin;          // 0 = the app-wide interval, -1 = never refresh it on its own
+    public DateTime LastTry;     // in memory: when this calendar was last attempted
 
     public static readonly string[] Kinds = { "Google", "Outlook", "Apple", "Other" };
     public static readonly string[] KindNames = { "Google Calendar", "Outlook / Microsoft 365", "Apple iCloud", "Other (.ics link)" };
@@ -254,6 +256,7 @@ class Settings
                                     s.Feeds.Add(new Feed
                                     {
                                         Name = Convert.ToString(f.GetValue("Name", "")), Url = Convert.ToString(f.GetValue("Url", "")), Kind = kind,
+                SyncMin = Convert.ToInt32(f.GetValue("SyncMin", 0)),
                                         Color = Color.FromArgb(255, Color.FromArgb(I(f, "Color", Feed.DefaultColor(kind).ToArgb()))), On = I(f, "On", 1) != 0
                                     });
                                 }
@@ -289,6 +292,7 @@ class Settings
                         {
                             f.SetValue("Name", Feeds[i].Name); f.SetValue("Url", Feeds[i].Url); f.SetValue("Kind", Feeds[i].Kind);
                             f.SetValue("Color", Feeds[i].Color.ToArgb()); f.SetValue("On", Feeds[i].On ? 1 : 0);
+                f.SetValue("SyncMin", Feeds[i].SyncMin);
                         }
             }
         }
@@ -1365,15 +1369,29 @@ class CalApp : ApplicationContext
         syncTimer.Start();
     }
 
-    public void Sync()
+    // A calendar may carry its own interval (SyncMin): 0 follows the app-wide setting, -1 means it is only
+    // ever refreshed by hand. A calendar that failed waits at least 15 minutes, so an offline server is not
+    // asked again every two minutes.
+    bool Due(Feed f)
+    {
+        if (f.SyncMin < 0) return false;
+        int mins = f.SyncMin > 0 ? f.SyncMin : Cfg.SyncMin;
+        if (f.Failed) mins = Math.Max(mins, 15);
+        return f.LastTry == default(DateTime) || (DateTime.Now - f.LastTry).TotalMinutes >= mins;
+    }
+
+    public void Sync() { Sync(false); }
+
+    public void Sync(bool force)
     {
         if (Interlocked.Exchange(ref busy, 1) == 1) return;
         syncTimer.Stop();
-        var feeds = Cfg.Feeds.Where(f => f.On && f.Url != "").ToList();
+        var feeds = Cfg.Feeds.Where(f => f.On && f.Url != "" && (force || Due(f))).ToList();
+        if (feeds.Count == 0) { busy = 0; ScheduleSync(60000); return; }
         Widget.SyncStarted();
         ThreadPool.QueueUserWorkItem(_ =>
         {
-            foreach (var f in feeds) Net.Sync(f);
+            foreach (var f in feeds) { f.LastTry = DateTime.Now; Net.Sync(f); }
             try { ui.BeginInvoke((Action)(() => SyncDone(feeds.Any(f => f.Changed)))); } catch { }
         });
     }
@@ -1383,8 +1401,7 @@ class CalApp : ApplicationContext
         busy = 0;
         if (changed) Rebuild(); else Widget.Render(true);
         if (settingsForm != null && !settingsForm.IsDisposed) settingsForm.SyncFinished();
-        bool anyFailed = Cfg.Feeds.Any(f => f.On && f.Failed);
-        ScheduleSync(anyFailed ? 2 * 60000 : Cfg.SyncMin * 60000);
+        ScheduleSync(60000); // wake once a minute; Due() decides which calendars are up
         if (changed || settingsForm == null || settingsForm.IsDisposed) Mem.Trim();
     }
 
@@ -3596,8 +3613,10 @@ class FeedDialog : Form
         "Paste any iCal subscription link (https://… or webcal://…, usually ending in .ics).",
     };
 
+    static readonly int[] Freqs = { 0, 5, 15, 30, 60, 180, 360, 720, 1440, -1 };
+    static readonly string[] FreqNames = { "Use the global interval", "5 minutes", "15 minutes", "30 minutes", "1 hour", "3 hours", "6 hours", "12 hours", "24 hours", "Never" };
     readonly TextBox name = new TextBox(), url = new TextBox();
-    readonly DarkCombo kind;
+    readonly DarkCombo kind, freq;
     readonly Label help = new Label(), result = new Label();
     readonly Button test;
     readonly List<Swatch> swatches = new List<Swatch>();
@@ -3642,6 +3661,11 @@ class FeedDialog : Form
         Style(name);
         Controls.Add(name);
         y += UI.I(42);
+
+        label("Update frequency", y);
+        freq = new DarkCombo(FreqNames, Math.Max(0, Array.IndexOf(Freqs, f != null ? f.SyncMin : 0))) { Location = new Point(L + LW, y), Width = UI.I(260) };
+        Controls.Add(freq);
+        y += UI.I(40);
 
         label("Colour", y);
         int sx = L + LW;
@@ -3773,7 +3797,7 @@ class FeedDialog : Form
         var k = Feed.Kinds[Math.Max(0, kind.SelectedIndex)];
         var n = name.Text.Trim();
         if (n == "") n = Feed.KindTitle(k);
-        Result = new Feed { Name = n, Url = link, Kind = k, Color = color, On = true };
+        Result = new Feed { Name = n, Url = link, Kind = k, Color = color, On = true, SyncMin = Freqs[Math.Max(0, freq.SelectedIndex)] };
         if (tested != null && testedUrl == link) { Result.Parsed = tested; Result.Status = "Synced " + DateTime.Now.ToString("t"); }
         DialogResult = DialogResult.OK;
         Close();

@@ -96,7 +96,7 @@ Right-click the widget or click the tray icon for **Settings**. Every change sho
 
 | Page | What's on it |
 |---|---|
-| **Calendars** | Each calendar with its colour and sync status. Switch one off, or click it to rename, recolour, change the link or remove it. Sync interval (5 minutes to 1 hour) |
+| **Calendars** | Each calendar with its colour and sync status. Switch one off, or click it to rename, recolour, change the link or remove it. Sync interval (5 minutes to 1 hour) for the app, and a per-calendar **Update frequency** (follow the global interval, 5 minutes to 24 hours, or never) |
 | **Agenda** | Days to show, merge duplicates, empty days, events per day, all-day events, today's finished events, times and durations, locations, countdown, progress bars, 24-hour time |
 | **Look** | Theme gallery, accent and background colour, font, size, width, background opacity, corner roundness, shadow, outline, restore default look |
 | **Layout** | Title style, month / week / hidden calendar, first day of the week, week numbers, weekend shading, spacing, event marker style |
