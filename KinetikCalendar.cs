@@ -3206,6 +3206,18 @@ class SettingsForm : Form
 {
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int v, int size);
     [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr h, string app, string id);
+    [DllImport("user32.dll")] static extern uint GetDpiForSystem();
+
+    // DeviceDpi is still 96 while the constructor runs, so on a 200% screen the window was built at 100%
+    // size and looked tiny. Ask Windows for the real system DPI instead.
+    static float DpiScale()
+    {
+        float dpi = 0;
+        try { dpi = GetDpiForSystem(); } catch { }
+        if (dpi < 72) { try { using (var g = Graphics.FromHwnd(IntPtr.Zero)) dpi = g.DpiX; } catch { dpi = 96; } }
+        if (dpi < 72) dpi = 96;
+        return Math.Max(1f, Math.Min(3f, dpi / 96f));
+    }
 
     readonly CalApp app;
     readonly Settings c;
@@ -3226,7 +3238,7 @@ class SettingsForm : Form
     public SettingsForm(CalApp app, string startPage)
     {
         this.app = app; c = app.Cfg;
-        UI.S = DeviceDpi / 96f;
+        UI.S = DpiScale();
         Text = "Kinetik Calendar";
         Icon = app.AppIcon;
         AutoScaleMode = AutoScaleMode.None;
@@ -3236,6 +3248,8 @@ class SettingsForm : Form
         BackColor = UI.Page; ForeColor = UI.Text;
         Font = UI.F(13);
         ClientSize = new Size(UI.I(1030), UI.I(720));
+        var wa = Screen.PrimaryScreen.WorkingArea; // a 300% screen would otherwise get a window taller than the desktop
+        ClientSize = new Size(Math.Min(ClientSize.Width, (int)(wa.Width * 0.94f)), Math.Min(ClientSize.Height, (int)(wa.Height * 0.94f)));
         DoubleBuffered = true;
 
         side.Dock = DockStyle.Left; side.Width = UI.I(184); side.BackColor = UI.Side;
