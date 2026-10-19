@@ -3662,7 +3662,7 @@ class SettingsForm : Form
     // ---- About
     void BuildAbout()
     {
-        Desc("A desktop agenda for Google, Outlook and iCloud calendars, in the style of Kinetik.");
+        Desc("A desktop agenda for Google, Outlook and iCloud calendars, one of the Kinetik apps.");
         Row("info", "Kinetik Calendar " + Program.Version, "Copyright © 2026 Akila Sella Hennedige. GPL-3.0-or-later.", null);
         long mem = 0;
         try { using (var pr = Process.GetCurrentProcess()) mem = pr.WorkingSet64; } catch { }
