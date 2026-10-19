@@ -369,6 +369,8 @@ class Theme
         new Theme("Ocean", C(12, 29, 45), C(228, 242, 250), C(128, 160, 186), C(56, 198, 232), false),
         new Theme("Sunset", C(40, 23, 35), C(250, 236, 240), C(192, 150, 172), C(255, 138, 92), false),
         new Theme("Mono", C(10, 10, 10), C(245, 245, 245), C(140, 140, 140), C(245, 245, 245), false),
+        new Theme("OLED black", C(0, 0, 0), C(242, 242, 245), C(136, 136, 146), C(76, 194, 255), false),
+        new Theme("Mocha", C(30, 30, 46), C(205, 214, 244), C(147, 153, 178), C(203, 166, 247), false),
         new Theme("Terminal", C(3, 10, 5), C(90, 255, 120), C(46, 170, 80), C(205, 255, 215), false),
         new Theme("Amber terminal", C(12, 7, 0), C(255, 182, 40), C(185, 118, 22), C(255, 232, 180), false),
         new Theme("Yellow terminal", C(0, 0, 0), C(255, 226, 0), C(200, 178, 0), C(255, 255, 190), false),
@@ -379,6 +381,8 @@ class Theme
 
     public static Theme Get(string name)
     {
+        // "App" follows the theme and accent colour every Kinetik app shares.
+        if (name == "App") { var l = KinetikSuite.Look.Current; return new Theme("App", l.Card, l.Text, l.Sub, l.Accent, l.Light); }
         foreach (var t in All) if (t.Name == name) return t;
         return All[0];
     }
@@ -3038,6 +3042,40 @@ class Card : Control
         if (right != null) { Controls.Add(right); SetBackColors(right); }
     }
 
+    // Cards one after another join into one card, split by hairlines, as in Kinetik's settings.
+    bool first = true, last = true;
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+        if (Parent == null) return;
+        Parent.ControlAdded -= Rejoin; Parent.ControlAdded += Rejoin;
+        Parent.ControlRemoved -= Rejoin; Parent.ControlRemoved += Rejoin;
+        Rejoin(Parent, null);
+    }
+
+    static void Rejoin(object sender, ControlEventArgs e)
+    {
+        var kids = ((Control)sender).Controls;
+        for (int i = 0; i < kids.Count; i++)
+        {
+            var card = kids[i] as Card;
+            if (card == null) continue;
+            bool f = i == 0 || !(kids[i - 1] is Card), l = i == kids.Count - 1 || !(kids[i + 1] is Card);
+            if (f == card.first && l == card.last) continue;
+            card.first = f; card.last = l;
+            card.Margin = new Padding(0, 0, 0, l ? UI.I(8) : 0);
+            card.Invalidate();
+        }
+    }
+
+    static System.Drawing.Drawing2D.GraphicsPath Shape(RectangleF r, float rad, bool top, bool bottom)
+    {
+        var p = new System.Drawing.Drawing2D.GraphicsPath(); float d = rad * 2;
+        if (top) { p.AddArc(r.X, r.Y, d, d, 180, 90); p.AddArc(r.Right - d, r.Y, d, d, 270, 90); } else p.AddLine(r.X, r.Y, r.Right, r.Y);
+        if (bottom) { p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.X, r.Bottom - d, d, d, 90, 90); } else p.AddLine(r.Right, r.Bottom, r.X, r.Bottom);
+        p.CloseFigure(); return p;
+    }
+
     static void SetBackColors(Control c)
     {
         if (c is Toggle || c is Slider || c is FlowLayoutPanel || c is Label || c is Swatch || c.GetType() == typeof(Panel)) c.BackColor = UI.Card;
@@ -3056,7 +3094,8 @@ class Card : Control
         g.Clear(BackColor);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-        Draw.Fill(g, new RectangleF(0, 0, Width - 1, Height - 1), UI.I(8), UI.Card);
+        using (var path = Shape(new RectangleF(0, 0, Width - 1, last ? Height - 1 : Height), UI.I(8), first, last)) using (var b = new SolidBrush(UI.Card)) g.FillPath(b, path);
+        if (!first) using (var pen = new Pen(KinetikSuite.Look.Current.Border, 1)) g.DrawLine(pen, UI.I(16), 0, Width - UI.I(16), 0);
         float isz = UI.I(18), ix = UI.I(16), iy = (Height - isz) / 2f;
         if (Swatch.HasValue) using (var b = new SolidBrush(Swatch.Value)) g.FillEllipse(b, ix + UI.I(2), iy + UI.I(2), isz - UI.I(4), isz - UI.I(4));
         else if (Glyph != null) UI.Glyph(g, Glyph, new RectangleF(ix, iy, isz, isz), UI.Accent);
@@ -3150,7 +3189,7 @@ class ThemeTile : Control
             g.Restore(st);
         }
         else Mini(g, inner, Theme.Get(ThemeName));
-        TextRenderer.DrawText(g, ThemeName == "Auto" ? "Match Windows" : ThemeName, UI.F(12), new Rectangle(0, Height - UI.I(26), Width, UI.I(20)), Selected ? UI.Text : UI.Sub,
+        TextRenderer.DrawText(g, ThemeName == "Auto" ? "Match Windows" : ThemeName == "App" ? "Match app theme" : ThemeName, UI.F(12), new Rectangle(0, Height - UI.I(26), Width, UI.I(20)), Selected ? UI.Text : UI.Sub,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
     }
 
@@ -3303,6 +3342,7 @@ class SettingsForm : Form
             TextRenderer.DrawText(g, "Kinetik", UI.F(17, FontStyle.Bold), new Point(UI.I(50), UI.I(18)), UI.Text);
             TextRenderer.DrawText(g, "Calendar", UI.F(12), new Point(UI.I(51), UI.I(40)), UI.Sub);
             TextRenderer.DrawText(g, "v" + Program.Version, UI.F(11.5f), new Point(UI.I(22), side.Height - UI.I(30)), UI.Sub);
+            using (var pen = new Pen(KinetikSuite.Look.Current.Border, 1)) g.DrawLine(pen, side.Width - 1, 0, side.Width - 1, side.Height);
         };
         int y = UI.I(84);
         foreach (var pg in Pages)
@@ -3376,7 +3416,7 @@ class SettingsForm : Form
 
     void Section(string t)
     {
-        page.Controls.Add(new Label { Text = t, Font = UI.F(13.5f, FontStyle.Bold), ForeColor = KinetikSuite.Look.Current.Sub, AutoSize = true, Margin = new Padding(0, UI.I(10), 0, UI.I(10)) });
+        page.Controls.Add(new Label { Text = t.ToUpperInvariant(), Font = UI.F(11f, FontStyle.Bold), ForeColor = KinetikSuite.Look.Current.Sub, AutoSize = true, Margin = new Padding(UI.I(2), UI.I(14), 0, UI.I(8)) });
     }
 
     Card Row(string glyph, string title, string sub, Control right)
@@ -3510,7 +3550,7 @@ class SettingsForm : Form
         Section("Theme");
         var gallery = new FlowLayoutPanel { Width = contentW + UI.I(8), AutoSize = true, MaximumSize = new Size(contentW + UI.I(8), 0), BackColor = UI.Page, Margin = new Padding(0, 0, 0, UI.I(6)) };
         var tiles = new List<ThemeTile>();
-        foreach (var name in new[] { "Auto" }.Concat(Theme.All.Select(t => t.Name)))
+        foreach (var name in new[] { "Auto", "App" }.Concat(Theme.All.Select(t => t.Name)))
         {
             var tile = new ThemeTile(name, c.ThemeName == name);
             tile.Click += (s, e) =>
