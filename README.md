@@ -7,15 +7,17 @@
 
 **Kinetik Calendar** is a free, open-source **desktop calendar widget for Windows 11 and Windows 10**. It puts your **Google Calendar**, **Outlook / Microsoft 365 calendar** and **Apple iCloud calendar** together on your desktop: a month view with a dot on every busy day, and an agenda of what's coming up, with countdowns and progress bars for what's happening now.
 
-There's no sign-in and no API key. Each calendar is read from its private iCal (`.ics`) subscription link, so it works with almost any calendar app. It's a small portable app with no installer, about 13 MB in memory and no measurable CPU use while idle. It's the calendar companion to [Kinetik](https://github.com/WastedDesigner/Kinetik), the taskbar system monitor, and shares its look.
+There's no sign-in and no API key. Each calendar is read from its private iCal (`.ics`) subscription link, so it works with almost any calendar app. It's a small portable app with no installer, about 13 MB in memory and no measurable CPU use while idle. It's the calendar companion to [Kinetik Stats](https://github.com/WastedDesigner/Kinetik), the taskbar system monitor, and shares its look.
 
 ![Kinetik Calendar on the desktop in the Midnight, Navy and Light themes](screenshots/hero.png)
 
 > **About this project:** I made this for my own desktop and decided to share it in case anyone else finds it useful. If you run into a bug or have an idea for a feature, please [open an issue](../../issues).
 
-**Latest version: v1.1.4.** [Download it from Releases](../../releases/latest).
+**Latest version: v2.0.0.** [Download it from Releases](../../releases/latest).
 
 ## Contents
+
+- [What's new in 2.0](#whats-new-in-20)
 
 - [Features](#features)
 - [Themes and layouts](#themes-and-layouts)
@@ -29,6 +31,17 @@ There's no sign-in and no API key. Each calendar is read from its private iCal (
 - [Known limitations](#known-limitations)
 - [Building from source](#building-from-source)
 - [License](#license)
+
+## What's new in 2.0
+
+Part of the Kinetik apps, with [Kinetik Stats](https://github.com/WastedDesigner/Kinetik) (the taskbar monitor, called just Kinetik until its v4.0), [Kinetik Hub](https://github.com/WastedDesigner/KinetikHub) and the other desktop widgets.
+
+- **Settings in Kinetik Stats' layout:** rows join into cards with thin dividers, small-caps headings, and drop-downs, switches and buttons in the app theme.
+- **App theme:** one theme and accent colour for every Kinetik app's windows and menus: Match Windows, Graphite, OLED black, Midnight, Nord, Mocha, Forest, Light or Paper, with a Sky, Violet, Mint, Amber, Rose or Coral accent or your Windows accent. Pick it in Settings → General, under **App theme** in the right-click menu, in Kinetik Hub or in Kinetik Stats, and every app follows.
+- **Widget themes:** new **OLED black** and **Mocha**, and **Match app theme**, which uses the app theme and accent colour.
+- **New icon** in the Kinetik apps' "Graphite glass" style.
+
+<img src="screenshots/settings-look.png" alt="The Look page of Kinetik Calendar's settings" width="600">
 
 ## Features
 

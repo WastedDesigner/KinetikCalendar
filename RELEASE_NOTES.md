@@ -1,5 +1,14 @@
 # Release notes
 
+## v2.0.0
+
+The Kinetik apps' new look.
+
+- **Settings in Kinetik Stats' layout:** rows join into cards with thin dividers, small-caps headings, and drop-downs, switches and buttons in the app theme.
+- **App theme:** one theme and accent colour for every Kinetik app's windows and menus: Match Windows, Graphite, OLED black, Midnight, Nord, Mocha, Forest, Light or Paper, with a Sky, Violet, Mint, Amber, Rose or Coral accent or your Windows accent. Pick it in Settings → General, under **App theme** in the right-click menu, in Kinetik Hub or in Kinetik Stats, and every app follows.
+- **Widget themes:** new **OLED black** and **Mocha**, and **Match app theme**, which uses the app theme and accent colour.
+- **New icon** in the Kinetik apps' "Graphite glass" style.
+
 ## v1.1.4
 
 Fixes and the shared Kinetik menu.

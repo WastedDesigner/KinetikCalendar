@@ -24,11 +24,11 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Kinetik Calendar")]
 [assembly: AssemblyProduct("Kinetik Calendar")]
 [assembly: AssemblyCopyright("Copyright © 2026 Akila Sella Hennedige")]
-[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyVersion("2.0.0.0")]
 
 static class Program
 {
-    public const string Version = "1.2.0";
+    public const string Version = "2.0.0";
     public static bool Demo; // --demo: made-up calendars, nothing read from or saved to this PC
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
 
