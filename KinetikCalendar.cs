@@ -1263,7 +1263,9 @@ sealed class ShadowCache : IDisposable
 
 class DarkColors : ProfessionalColorTable
 {
-    static readonly Color Bg = Color.FromArgb(27, 31, 44), Hi = Color.FromArgb(40, 47, 66), Edge = Color.FromArgb(52, 60, 82);
+    static Color Bg { get { return KinetikSuite.Look.Current.Card; } }
+    static Color Hi { get { return KinetikSuite.Look.Current.Hover; } }
+    static Color Edge { get { return KinetikSuite.Look.Current.Border; } }
     public override Color ToolStripDropDownBackground { get { return Bg; } }
     public override Color ImageMarginGradientBegin { get { return Bg; } }
     public override Color ImageMarginGradientMiddle { get { return Bg; } }
@@ -1277,9 +1279,9 @@ class DarkColors : ProfessionalColorTable
     public override Color MenuItemPressedGradientEnd { get { return Hi; } }
     public override Color SeparatorDark { get { return Edge; } }
     public override Color SeparatorLight { get { return Edge; } }
-    public override Color CheckBackground { get { return Color.FromArgb(52, 96, 160); } }
-    public override Color CheckSelectedBackground { get { return Color.FromArgb(62, 110, 180); } }
-    public override Color CheckPressedBackground { get { return Color.FromArgb(62, 110, 180); } }
+    public override Color CheckBackground { get { return KinetikSuite.Look.Current.Hover; } }
+    public override Color CheckSelectedBackground { get { return KinetikSuite.Look.Current.Hover; } }
+    public override Color CheckPressedBackground { get { return KinetikSuite.Look.Current.Hover; } }
 }
 
 class DarkMenu : ToolStripProfessionalRenderer
@@ -1287,12 +1289,12 @@ class DarkMenu : ToolStripProfessionalRenderer
     public DarkMenu() : base(new DarkColors()) { RoundedEdges = false; }
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
-        e.TextColor = e.Item.Enabled ? Color.FromArgb(232, 236, 244) : Color.FromArgb(110, 118, 140);
+        e.TextColor = e.Item.Enabled ? KinetikSuite.Look.Current.Text : KinetikSuite.Look.Current.Sub;
         base.OnRenderItemText(e);
     }
     protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
     {
-        e.ArrowColor = Color.FromArgb(180, 188, 205);
+        e.ArrowColor = KinetikSuite.Look.Current.Sub;
         base.OnRenderArrow(e);
     }
 }
@@ -2629,9 +2631,27 @@ static class UI
     public static float S = 1;
     public static int I(float v) { return (int)Math.Round(v * S); }
 
-    public static readonly Color Side = Color.FromArgb(19, 23, 33), Page = Color.FromArgb(24, 28, 40), Card = Color.FromArgb(31, 36, 51),
-        CardHi = Color.FromArgb(36, 42, 59), Field = Color.FromArgb(40, 46, 64), Edge = Color.FromArgb(56, 64, 88), Text = Color.FromArgb(232, 236, 244),
-        Sub = Color.FromArgb(140, 150, 174), Accent = Color.FromArgb(64, 168, 255), Warn = Color.FromArgb(255, 170, 60), Good = Color.FromArgb(110, 210, 140);
+    public static Color Side { get { return KinetikSuite.Look.Current.Nav; } }
+
+    public static Color Page { get { return KinetikSuite.Look.Current.Bg; } }
+
+    public static Color Card { get { return KinetikSuite.Look.Current.Card; } }
+
+    public static Color CardHi { get { return KinetikSuite.Look.Current.Hover; } }
+
+    public static Color Field { get { return KinetikSuite.Look.Current.Field; } }
+
+    public static Color Edge { get { return KinetikSuite.Look.Current.Border; } }
+
+    public static Color Text { get { return KinetikSuite.Look.Current.Text; } }
+
+    public static Color Sub { get { return KinetikSuite.Look.Current.Sub; } }
+
+    public static Color Accent { get { return KinetikSuite.Look.Current.Accent; } }
+
+    public static Color Warn { get { return KinetikSuite.Look.Current.Light ? Color.FromArgb(176, 112, 0) : Color.FromArgb(255, 170, 60); } }
+
+    public static Color Good { get { return KinetikSuite.Look.Current.Good; } }
 
     static readonly Dictionary<string, Font> fonts = new Dictionary<string, Font>();
     public static Font F(float px, FontStyle st = FontStyle.Regular)
@@ -2646,12 +2666,12 @@ static class UI
     {
         var b = new Button
         {
-            Text = text, FlatStyle = FlatStyle.Flat, BackColor = primary ? Color.FromArgb(40, 120, 210) : Field, ForeColor = Text,
+            Text = text, FlatStyle = FlatStyle.Flat, BackColor = primary ? KinetikSuite.Look.Current.Accent : Field, ForeColor = primary ? KinetikSuite.Look.Current.OnAccent : Text,
             Font = F(13), AutoSize = true, MinimumSize = new Size(I(84), I(32)), Padding = new Padding(I(8), 0, I(8), 0), UseVisualStyleBackColor = false, Cursor = Cursors.Hand,
         };
-        b.FlatAppearance.BorderColor = primary ? Color.FromArgb(60, 140, 230) : Edge;
-        b.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(52, 134, 228) : Color.FromArgb(50, 57, 78);
-        b.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(34, 104, 190) : Color.FromArgb(44, 50, 70);
+        b.FlatAppearance.BorderColor = primary ? KinetikSuite.Look.Current.Accent : Edge;
+        b.FlatAppearance.MouseOverBackColor = primary ? KinetikSuite.Look.Current.Accent : KinetikSuite.Look.Current.Hover;
+        b.FlatAppearance.MouseDownBackColor = primary ? KinetikSuite.Look.Current.Accent : KinetikSuite.Look.Current.Hover;
         b.Click += click;
         return b;
     }
@@ -2851,11 +2871,11 @@ class Toggle : Control
         g.Clear(BackColor);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var r = new RectangleF(1, 1, Width - 2, Height - 2);
-        Draw.Fill(g, r, r.Height / 2, Draw.Mix(Color.FromArgb(52, 58, 80), UI.Accent, pos));
+        Draw.Fill(g, r, r.Height / 2, Draw.Mix(KinetikSuite.Look.Current.Border, UI.Accent, pos));
         if (pos < 1) Draw.Stroke(g, r, r.Height / 2, Color.FromArgb((int)(255 * (1 - pos)), 82, 92, 120), 1);
         if (Focused) Draw.Stroke(g, RectangleF.Inflate(r, -0.5f, -0.5f), r.Height / 2, Color.FromArgb(120, 255, 255, 255), 1);
         float d = Height - UI.I(8), x = UI.I(4) + pos * (Width - UI.I(8) - d);
-        using (var b = new SolidBrush(Draw.Mix(Color.FromArgb(200, 206, 222), Color.White, pos))) g.FillEllipse(b, x, UI.I(4), d, d);
+        using (var b = new SolidBrush(Draw.Mix(KinetikSuite.Look.Current.Sub, Color.White, pos))) g.FillEllipse(b, x, UI.I(4), d, d);
     }
 }
 
@@ -2916,7 +2936,7 @@ class Slider : Control
     void BeginEdit(string seed)
     {
         if (edit != null) return;
-        edit = new TextBox { BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Right, Font = UI.F(11f), BackColor = Color.FromArgb(36, 40, 56), ForeColor = UI.Text, Width = UI.I(60) };
+        edit = new TextBox { BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Right, Font = UI.F(11f), BackColor = KinetikSuite.Look.Current.Border, ForeColor = UI.Text, Width = UI.I(60) };
         edit.Location = new Point(Width - edit.Width - 1, (Height - edit.Height) / 2);
         edit.Text = seed ?? Value.ToString();
         edit.KeyDown += (s, e) =>
@@ -2966,7 +2986,7 @@ class Slider : Control
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
         var tr = Track;
         float f = Max == Min ? 0 : (Value - Min) / (float)(Max - Min);
-        Draw.Fill(g, tr, tr.Height / 2, Color.FromArgb(52, 58, 80));
+        Draw.Fill(g, tr, tr.Height / 2, KinetikSuite.Look.Current.Border);
         Draw.Fill(g, new RectangleF(tr.X, tr.Y, Math.Max(tr.Height, tr.Width * f), tr.Height), tr.Height / 2, UI.Accent);
         float d = UI.I(14), kx = tr.X + tr.Width * f - d / 2;
         if (Focused) using (var b = new SolidBrush(Color.FromArgb(60, UI.Accent))) g.FillEllipse(b, kx - UI.I(4), Height / 2f - d / 2 - UI.I(4), d + UI.I(8), d + UI.I(8));
@@ -2975,7 +2995,7 @@ class Slider : Control
     }
 }
 
-class DarkCombo : ComboBox
+class DarkCombo : KinetikSuite.Dropdown
 {
     public DarkCombo(string[] items, int sel)
     {
@@ -2994,7 +3014,7 @@ class DarkCombo : ComboBox
     {
         if (e.Index < 0) return;
         bool edit = (e.State & DrawItemState.ComboBoxEdit) != 0, sel = (e.State & DrawItemState.Selected) != 0 && !edit;
-        using (var b = new SolidBrush(sel ? Color.FromArgb(46, 96, 168) : UI.Field)) e.Graphics.FillRectangle(b, e.Bounds);
+        using (var b = new SolidBrush(sel ? KinetikSuite.Look.Current.Hover : UI.Field)) e.Graphics.FillRectangle(b, e.Bounds);
         TextRenderer.DrawText(e.Graphics, Items[e.Index].ToString(), Font, new Rectangle(e.Bounds.X + UI.I(6), e.Bounds.Y, e.Bounds.Width - UI.I(6), e.Bounds.Height), UI.Text,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
     }
@@ -3173,10 +3193,10 @@ class NavItem : Control
         var g = e.Graphics;
         g.Clear(BackColor);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        if (Selected || hot) Draw.Fill(g, new RectangleF(UI.I(6), UI.I(2), Width - UI.I(12), Height - UI.I(4)), UI.I(7), Selected ? Color.FromArgb(33, 39, 56) : Color.FromArgb(26, 31, 45));
+        if (Selected || hot) Draw.Fill(g, new RectangleF(UI.I(6), UI.I(2), Width - UI.I(12), Height - UI.I(4)), UI.I(7), Selected ? KinetikSuite.Look.Current.Hover : KinetikSuite.Look.Current.Card);
         if (Selected) Draw.Fill(g, new RectangleF(UI.I(6), Height / 2f - UI.I(8), UI.I(3), UI.I(16)), UI.I(1.5f), UI.Accent);
         UI.Glyph(g, Glyph, new RectangleF(UI.I(20), (Height - UI.I(18)) / 2f, UI.I(18), UI.I(18)), Selected ? UI.Accent : UI.Sub);
-        TextRenderer.DrawText(g, Page, UI.F(13.5f), new Rectangle(UI.I(50), 0, Width - UI.I(50), Height), Selected ? UI.Text : Color.FromArgb(190, 198, 215), TextFormatFlags.VerticalCenter);
+        TextRenderer.DrawText(g, Page, UI.F(13.5f), new Rectangle(UI.I(50), 0, Width - UI.I(50), Height), Selected ? UI.Text : KinetikSuite.Look.Current.Sub, TextFormatFlags.VerticalCenter);
     }
 }
 
@@ -3303,9 +3323,7 @@ class SettingsForm : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        int one = 1; DwmSetWindowAttribute(Handle, 20, ref one, 4); // dark title bar
-        int round = 2; DwmSetWindowAttribute(Handle, 33, ref round, 4);
-        int caption = ColorTranslator.ToWin32(UI.Side); DwmSetWindowAttribute(Handle, 35, ref caption, 4);
+        KinetikSuite.Look.Current.Window(Handle); // title bar in the Kinetik apps' theme
     }
 
     protected override void Dispose(bool disposing) { if (disposing) previewTimer.Dispose(); base.Dispose(disposing); }
@@ -3358,7 +3376,7 @@ class SettingsForm : Form
 
     void Section(string t)
     {
-        page.Controls.Add(new Label { Text = t, Font = UI.F(13.5f, FontStyle.Bold), ForeColor = Color.FromArgb(180, 190, 210), AutoSize = true, Margin = new Padding(0, UI.I(10), 0, UI.I(10)) });
+        page.Controls.Add(new Label { Text = t, Font = UI.F(13.5f, FontStyle.Bold), ForeColor = KinetikSuite.Look.Current.Sub, AutoSize = true, Margin = new Padding(0, UI.I(10), 0, UI.I(10)) });
     }
 
     Card Row(string glyph, string title, string sub, Control right)
@@ -3537,7 +3555,7 @@ class SettingsForm : Form
         {
             var sw = new Swatch(col, UI.I(28)) { Location = new Point(fx, UI.I(1)) };
             fx += UI.I(30);
-            if (glyph == "opacity") sw.Color = Draw.Mix(Color.FromArgb(16, 18, 24), col, 0.18f);
+            if (glyph == "opacity") sw.Color = Draw.Mix(KinetikSuite.Look.Current.Bg, col, 0.18f);
             sw.Click += (s, e) => { set(((Swatch)s).Color.ToArgb()); Changed(false); refresh(); };
             opts.Add(sw); flow.Controls.Add(sw);
         }
@@ -3552,7 +3570,7 @@ class SettingsForm : Form
         refresh = () =>
         {
             foreach (var sw in opts) { sw.Selected = get() != 0 && sw.Color.ToArgb() == get(); sw.Invalidate(); }
-            themeBtn.BackColor = get() == 0 ? Color.FromArgb(46, 96, 168) : UI.Field;
+            themeBtn.BackColor = get() == 0 ? KinetikSuite.Look.Current.Hover : UI.Field;
         };
         refresh();
         Row(glyph, title, sub, flow);
@@ -3715,7 +3733,7 @@ class FeedDialog : Form
                 if (MessageBox.Show(this, "Remove \"" + f.Name + "\" from the widget?\n\nOnly the widget forgets it. The calendar itself isn't changed.", "Remove calendar", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK)
                 { DialogResult = DialogResult.Abort; Close(); }
             });
-            remove.ForeColor = Color.FromArgb(255, 130, 120);
+            remove.ForeColor = KinetikSuite.Look.Current.Warn;
             remove.AutoSize = false; remove.SetBounds(L, y, UI.I(94), UI.I(34));
             Controls.Add(remove);
         }
@@ -3740,8 +3758,7 @@ class FeedDialog : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        int one = 1; DwmSetWindowAttribute(Handle, 20, ref one, 4);
-        int caption = ColorTranslator.ToWin32(UI.Page); DwmSetWindowAttribute(Handle, 35, ref caption, 4);
+        KinetikSuite.Look.Current.Window(Handle); // title bar in the Kinetik apps' theme
     }
 
     void MarkSwatch()
@@ -3928,6 +3945,7 @@ class CommonMenu
 
     public string Title, Version;
     public Action OpenTheme;                                        // opens the theme picker (or the page with it)
+    public Action LookChanged;                                      // optional: after the App theme changes
     public Func<int> Scale; public Action<int> SetScale;
     public int[] Widths; public Func<int> CardWidth; public Action<int> SetCardWidth; // optional: Narrow, Normal, Wide
     public Func<string> FontName; public Action<string> SetFontName;   // optional; "" = the default font
@@ -3957,7 +3975,8 @@ class CommonMenu
     // Appearance and placement: Theme, Size, Font, Background opacity, Placement.
     public void AddLook(ToolStripItemCollection items)
     {
-        if (OpenTheme != null) items.Add(Item("Theme…", false, OpenTheme));
+        if (OpenTheme != null) items.Add(Item("Widget theme…", false, OpenTheme));
+        items.Add(KinetikSuite.Look.MenuItem(LookChanged)); // the theme of every Kinetik app's windows and menus
 
         var size = new ToolStripMenuItem("Size");
         foreach (var s in Scales) { int v = s; size.DropDownItems.Add(Item(v + "%", Scale() == v, () => SetScale(v))); }
