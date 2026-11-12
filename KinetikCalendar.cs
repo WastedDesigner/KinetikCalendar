@@ -1,4 +1,4 @@
-// Kinetik Calendar: a desktop agenda widget for Google, Outlook and Apple (iCloud) calendars, in the style of Kinetik's widget.
+﻿// Kinetik Calendar: a desktop agenda widget for Google, Outlook and Apple (iCloud) calendars, in the style of Kinetik's widget.
 // Each calendar is read from its private iCal (.ics) link, so there's no sign-in, no API keys and nothing to install.
 // Copyright © 2026 Akila Sella Hennedige. GPL-3.0-or-later.
 using System;
@@ -45,7 +45,7 @@ static class Program
             ServicePointManager.DefaultConnectionLimit = 4;
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            ToolStripManager.Renderer = new DarkMenu();
+            ToolStripManager.Renderer = KinetikSuite.Look.Current.MenuRenderer();
             Backup.KeyName = "KinetikCalendar"; Backup.AppTitle = "Kinetik Calendar";
             if (!Demo) Backup.OfferRestore();
             var app = new CalApp(args.Contains("--settings"));
@@ -1675,7 +1675,7 @@ class Painter : IDisposable
         fValue = new Font(fam, 12.5f * U, FontStyle.Bold, GraphicsUnit.Pixel);
         fHead = new Font(fam, 10.5f * U, FontStyle.Bold, GraphicsUnit.Pixel);
         fSmall = new Font(fam, 11.5f * U, FontStyle.Regular, GraphicsUnit.Pixel);
-        fTitle = new Font(fam, 15f * U, FontStyle.Bold, GraphicsUnit.Pixel);
+        fTitle = new Font(fam, 17f * U, FontStyle.Bold, GraphicsUnit.Pixel);
         fClock = new Font(Draw.Has(fam + " Light") ? fam + " Light" : Draw.Has("Segoe UI Light") && fam.StartsWith("Segoe") ? "Segoe UI Light" : fam, 36f * U, FontStyle.Regular, GraphicsUnit.Pixel);
         fClockSub = new Font(fam, 13f * U, FontStyle.Regular, GraphicsUnit.Pixel);
         fDay = new Font(fam, 11.5f * U, FontStyle.Regular, GraphicsUnit.Pixel);
@@ -1719,7 +1719,7 @@ class Painter : IDisposable
 
     // ---- rows
     float LineH { get { return (c.Density == 0 ? 18 : c.Density == 2 ? 22 : 20) * U; } }
-    float Gap { get { return (c.Density == 0 ? 3 : c.Density == 2 ? 10 : 6) * U; } }
+    float Gap { get { return (c.Density == 0 ? 3 : c.Density == 2 ? 12 : 9) * U; } }
     float SubH { get { return (c.Density == 0 ? 14 : 15) * U; } }
 
     float Height(Row r, bool firstInCard)
@@ -1728,10 +1728,10 @@ class Painter : IDisposable
         {
             case 0: return LineH + (r.Sub != null ? SubH : 0) + (r.Now && c.ProgressBars ? 9 * U : 0) + Gap;
             case 1: return firstInCard ? 18 * U : (c.Density == 0 ? 24 : c.Density == 2 ? 34 : 30) * U;
-            case 2: return 30 * U;
-            case 3: return (NavH + 18 + Weeks(ViewAnchor(DateTime.Today), c.FirstDow) * 23 + 4) * U;
+            case 2: return 36 * U;
+            case 3: return (NavH + 22 + Weeks(ViewAnchor(DateTime.Today), c.FirstDow) * DayH + 8) * U;
             case 5: return 66 * U;
-            case 6: return (NavH + 18 + 23 + 6) * U;
+            case 6: return (NavH + 22 + DayH + 10) * U;
             default: return 24 * U;
         }
     }
@@ -1850,7 +1850,7 @@ class Painter : IDisposable
         for (int i = 0; i < body.Count; i++) { body[i].H = Height(body[i], i == 0 && head.Count == 0); BodyFull += body[i].H; }
         if (head.Count > 0 && body.Count > 0 && head[head.Count - 1].Kind == 3) headH -= 4 * U;
 
-        Pad = 14 * U;
+        Pad = 18 * U;
         Margin = c.Shadow && c.Opacity >= 25 ? (int)Math.Ceiling(14 * U) : 1;
         CardW = Math.Max(200, (int)(c.Width * U));
         float full = Pad * 2 + headH + BodyFull - Gap;
@@ -1884,7 +1884,7 @@ class Painter : IDisposable
         int alpha = (int)Math.Round(c.Opacity * 2.55);
         float cardH = DrawCardH > 0 ? DrawCardH : CardH;
         var card = new RectangleF(Margin, Margin, CardW, cardH);
-        float rad = Math.Min(card.Height / 2, 12 * U * c.Round / 100f);
+        float rad = Math.Min(card.Height / 2, 16 * U * c.Round / 100f);
         var size = target.VisibleClipBounds;
         int lw = (int)Math.Ceiling(size.Width), lh = (int)Math.Ceiling(size.Height);
 
@@ -2054,6 +2054,8 @@ class Painter : IDisposable
         var col = r.Ev.Feed.Color;
         int a = r.Dim ? 100 : 255;
         var rowRect = new RectangleF(x0 - 6 * U, y - 1 * U, x1 - x0 + 12 * U, r.H - Gap + 2 * U);
+        if (r.Now && c.Marker != 2)
+            Draw.Fill(g, rowRect, 8 * U, Color.FromArgb(Th.Light ? 14 : 22, col));
         if (Hover == r.Ev && HoverA > 0.01f)
             Draw.Fill(g, rowRect, 7 * U, Color.FromArgb((int)(HoverA * (Th.Light ? 16 : 22)), Th.Light ? Color.Black : Color.White));
         float barH = lineH - 6 * U + (r.Sub != null ? SubH : 0);
@@ -2133,7 +2135,7 @@ class Painter : IDisposable
     }
 
     // ---- moving between months (or weeks, in the week view)
-    const float NavH = 24;
+    const float NavH = 32, DayH = 29;
     public int ViewOffset;        // months (or weeks) away from now
     public float GridShift;       // horizontal slide while changing month, in pixels
     public int HoverNav;          // -1 previous, 1 next, 2 today, 0 none
@@ -2154,7 +2156,7 @@ class Painter : IDisposable
         brush.Color = ViewOffset == 0 ? Th.Text : Th.Accent;
         g.DrawString(label, fValue, brush, new RectangleF(x0, y, x1 - x0 - 90 * U, 18 * U), Trim);
 
-        float bw = 22 * U, bh = 20 * U, by = y - 1 * U;
+        float bw = 26 * U, bh = 24 * U, by = y - 2 * U;
         NavNext = new RectangleF(x1 - bw, by, bw, bh);
         NavPrev = new RectangleF(x1 - bw * 2 - 2 * U, by, bw, bh);
         NavToday = RectangleF.Empty;
@@ -2167,8 +2169,8 @@ class Painter : IDisposable
             g.DrawString("Today", fSmall, brush, NavToday, Center);
         }
         var hover = Color.FromArgb(Th.Light ? 16 : 24, Th.Text);
-        if (HoverNav == -1) Draw.Fill(g, NavPrev, 6 * U, hover);
-        if (HoverNav == 1) Draw.Fill(g, NavNext, 6 * U, hover);
+        Draw.Fill(g, NavPrev, 8 * U, HoverNav == -1 ? hover : Color.FromArgb(Th.Light ? 7 : 12, Th.Text));
+        Draw.Fill(g, NavNext, 8 * U, HoverNav == 1 ? hover : Color.FromArgb(Th.Light ? 7 : 12, Th.Text));
         using (var p = new Pen(Th.Sub, 1.6f * U) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
         {
             float s = 4 * U;
@@ -2188,15 +2190,15 @@ class Painter : IDisposable
         y += NavH * U;
         var start = weekOnly ? anchor : GridStart(anchor, fdw);
         int weeks = weekOnly ? 1 : Weeks(anchor, fdw);
-        GridArea = new RectangleF(x0, y - NavH * U, x1 - x0, (NavH + 18) * U + 23 * U * weeks);
+        GridArea = new RectangleF(x0, y - NavH * U, x1 - x0, (NavH + 22) * U + DayH * U * weeks);
         var st = g.Save();
         if (Math.Abs(GridShift) > 0.5f) // slides in from the side it's coming from
         {
-            g.SetClip(new RectangleF(x0 - 4 * U, y - 4 * U, x1 - x0 + 8 * U, 18 * U + 23 * U * weeks + 10 * U), CombineMode.Intersect);
+            g.SetClip(new RectangleF(x0 - 4 * U, y - 4 * U, x1 - x0 + 8 * U, 22 * U + DayH * U * weeks + 10 * U), CombineMode.Intersect);
             g.TranslateTransform(GridShift, 0);
         }
         float wn = c.WeekNumbers ? 24 * U : 0;
-        float cw = (x1 - x0 - wn) / 7, rh = 23 * U, top = y + 18 * U;
+        float cw = (x1 - x0 - wn) / 7, rh = DayH * U, top = y + 22 * U;
         var dtf = CultureInfo.CurrentCulture.DateTimeFormat;
 
         for (int i = 0; i < 7; i++)
@@ -2204,7 +2206,7 @@ class Painter : IDisposable
             var dow = (DayOfWeek)(((int)fdw + i) % 7);
             float cx0 = x0 + wn + cw * i;
             if (c.ShadeWeekends && (dow == DayOfWeek.Saturday || dow == DayOfWeek.Sunday))
-                Draw.Fill(g, new RectangleF(cx0 + 2 * U, y - 2 * U, cw - 4 * U, 18 * U + rh * weeks + 2 * U), 7 * U, Color.FromArgb(Th.Light ? 9 : 10, Th.Text));
+                Draw.Fill(g, new RectangleF(cx0 + 2 * U, y - 2 * U, cw - 4 * U, 22 * U + rh * weeks + 2 * U), 7 * U, Color.FromArgb(Th.Light ? 9 : 10, Th.Text));
             var name = dtf.GetShortestDayName(dow);
             brush.Color = Color.FromArgb(215, Th.Sub);
             g.DrawString(name.Substring(0, Math.Min(2, name.Length)), fHead, brush, new RectangleF(cx0, y, cw, 14 * U), Center);
@@ -2245,11 +2247,11 @@ class Painter : IDisposable
                         var gb = path.GetBounds();
                         if (gb.Width > 0) { ccx = gb.X + gb.Width / 2; ccy = gb.Y + gb.Height / 2; }
                     }
-                    float rr = 10 * U * pop;
+                    float rr = 11 * U * pop;
                     if (isToday && rr > 0.5f) using (var b = new SolidBrush(Th.Accent)) g.FillEllipse(b, ccx - rr, ccy - rr, rr * 2, rr * 2);
                     if (picked) // the clicked day gets a ring
                     {
-                        float pr = isToday ? 12 * U : 10 * U;
+                        float pr = isToday ? 13 * U : 11 * U;
                         using (var p = new Pen(Th.Accent, 1.6f * U)) g.DrawEllipse(p, ccx - pr, ccy - pr, pr * 2, pr * 2);
                     }
                 }

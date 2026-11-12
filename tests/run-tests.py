@@ -2,8 +2,6 @@
 """Run real shared code and extracted app algorithms, without launching a GUI."""
 from pathlib import Path
 import argparse
-import json
-import os
 import re
 import shutil
 import subprocess
@@ -59,22 +57,20 @@ with tempfile.TemporaryDirectory(prefix='kinetik-tests-') as directory:
     generated = temp / 'AppAlgorithms.cs'; generated.write_text('\n'.join(modules))
     core = tests / 'SuiteCoreTests.cs'
     support = app / 'SuiteSupport.cs'
-    if os.name == 'nt':
-        csc = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-        binary = temp / 'SuiteTests.exe'
-        command = [str(csc), '/nologo', '/define:SUITE_CORE_TEST', '/nowarn:0649', '/target:exe', '/out:' + str(binary), '/r:System.dll', '/r:System.Core.dll', '/r:System.Drawing.dll', str(support), str(core), str(generated)]
-        run = [str(binary)]
-    else:
-        dotnet = shutil.which('dotnet')
-        version, sdkdir = re.findall(r'^([^ ]+) \[([^\]]+)\]', subprocess.check_output([dotnet, '--list-sdks'], text=True), re.M)[-1]
-        runtime_root = Path(sdkdir).parent
-        ref = sorted((runtime_root / 'packs/Microsoft.NETCore.App.Ref').glob('*/ref/net*'))[-1]
-        framework = ref.name; runtime_version = ref.parent.parent.name
-        binary = temp / 'SuiteTests.dll'
-        command = [dotnet, str(Path(sdkdir) / version / 'Roslyn/bincore/csc.dll'), '-nologo', '-noconfig', '-nostdlib', '-define:SUITE_CORE_TEST', '-nowarn:0649', '-target:exe', '-out:' + str(binary)]
-        command += ['-r:' + str(p) for p in ref.glob('*.dll')] + [str(support), str(core), str(generated)]
-        (temp / 'SuiteTests.runtimeconfig.json').write_text(json.dumps({'runtimeOptions': {'tfm': framework, 'framework': {'name': 'Microsoft.NETCore.App', 'version': runtime_version}}}))
-        run = [dotnet, str(binary)]
+    # Run the real algorithms on the same .NET 8 runtime as the application.
+    shutil.copy2(support, temp / 'SuiteSupport.cs')
+    shutil.copy2(core, temp / 'SuiteCoreTests.cs')
+    project = temp / 'SuiteTests.csproj'
+    project.write_text('''<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <DefineConstants>SUITE_CORE_TEST</DefineConstants>
+    <NoWarn>0649;CA1416;SYSLIB0014</NoWarn>
+  </PropertyGroup>
+</Project>''')
+    command = ['dotnet', 'build', str(project), '-nologo', '-v', 'q', '-o', str(temp / 'out')]
+    run = ['dotnet', str(temp / 'out/SuiteTests.dll')]
     build = subprocess.run(command, capture_output=True, text=True)
     output = build.stdout + build.stderr
     if build.returncode == 0:

@@ -164,7 +164,7 @@ No. It's read-only by design. Click an event to open it in Google Calendar, Outl
 ## Requirements
 
 - Windows 10 or 11 (64-bit)
-- .NET Framework 4.7.2 or later (already part of Windows 10 and 11)
+- .NET 8 Desktop Runtime (x64), the same runtime used by Kinetik Files and Stats
 
 ## Known limitations
 
@@ -175,13 +175,13 @@ No. It's read-only by design. Click an event to open it in Google Calendar, Outl
 
 ## Building from source
 
-No Visual Studio or SDK needed. It compiles with the .NET Framework compiler that's built into Windows.
+Install the .NET 8 SDK (8.0.400 or later in the 8.0 series), then run:
 
 ```bat
 build.bat
 ```
 
-This produces `KinetikCalendar.exe` with the app icon embedded (`make-icon.ps1` draws `icon.ico` if it's missing). `build.bat package` also makes `KinetikCalendar.zip` for a release. Everything is in one file, `KinetikCalendar.cs`.
+This produces a single `KinetikCalendar.exe` with the app icon embedded (`make-icon.ps1` draws `icon.ico` if it's missing). It requires the .NET 8 Desktop Runtime (x64). `build.bat package` also makes `KinetikCalendar.zip` for a release. The project compiles `KinetikCalendar.cs` and `SuiteSupport.cs`.
 
 ## Version history
 

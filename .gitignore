@@ -2,6 +2,8 @@
 *.pdb
 *.zip
 dist/
+bin/
+obj/
 *-settings.reg
 .github/
 *.zip.sha256

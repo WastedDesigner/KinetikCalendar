@@ -1,11 +1,11 @@
 @echo off
 cd /d "%~dp0"
-rem Builds KinetikCalendar.exe with the .NET Framework compiler that ships with Windows. No SDK needed.
+rem Builds a single executable with the .NET 8 SDK; requires the .NET 8 Desktop Runtime to run.
 rem "build.bat package" also makes KinetikCalendar.zip (the exe, README and licence) for a release.
 if not exist icon.ico powershell -NoProfile -ExecutionPolicy Bypass -File make-icon.ps1 || exit /b 1
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /utf8output /codepage:65001 /platform:x64 /target:winexe /out:KinetikCalendar.new.exe /win32icon:icon.ico /resource:icon.ico,icon.ico ^
-  /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll ^
-  KinetikCalendar.cs SuiteSupport.cs || exit /b 1
+set OUT=%LOCALAPPDATA%\Kinetik\Build\publish-KinetikCalendar
+dotnet publish KinetikCalendar.csproj -c Release -nologo -v q -p:PublishSingleFile=true -o "%OUT%" || exit /b 1
+copy /y "%OUT%\KinetikCalendar.exe" KinetikCalendar.new.exe >nul || exit /b 1
 rem Keep previous binaries. Never delete recovery material during a build.
 if not exist "..\Old Versions\" mkdir "..\Old Versions" || exit /b 1
 if exist KinetikCalendar.exe (
