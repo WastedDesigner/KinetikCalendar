@@ -2544,6 +2544,8 @@ class WidgetForm : Form
     [StructLayout(LayoutKind.Sequential)] struct WINDOWPOS { public IntPtr hwnd, hwndInsertAfter; public int x, y, cx, cy; public uint flags; }
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetProp(IntPtr h, string n);
+    bool HubHid { get { return GetProp(Handle, "KinetikHubHidden") != IntPtr.Zero; } } // set by Kinetik Hub's "Hide all widgets"
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
     [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int i, int v);
 
@@ -2887,7 +2889,7 @@ class WidgetForm : Form
         using (var g = Graphics.FromImage(bmp)) P.Paint(g);
         byte alpha = (byte)(P.PushAlpha * Draw.Ease(P.Appear * 1.6f));
         surface.Push(Handle, c.X, c.Y, alpha);
-        if (!Visible || alpha > 0)
+        if ((!Visible || alpha > 0) && !HubHid)
         {
             ShowWindow(Handle, 8); // SW_SHOWNA
             if (Layer == 0) SetWindowPos(Handle, new IntPtr(1), 0, 0, 0, 0, 0x1 | 0x2 | 0x10);       // bottom of the pile
