@@ -13,7 +13,7 @@
     <AssemblyName>KinetikCalendar</AssemblyName>
     <RootNamespace />
     <!-- Assembly metadata is declared in KinetikCalendar.cs. -->
-    <Version>2.0.1</Version>
+    <Version>2.1.0</Version>
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
     <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>

@@ -32,6 +32,14 @@ There's no sign-in and no API key. Each calendar is read from its private iCal (
 - [Building from source](#building-from-source)
 - [License](#license)
 
+## What's new in 2.1
+
+- **Reminders:** a notification 5 minutes to 1 hour before a timed event starts (Settings → Behaviour → Remind me; 10 minutes by default).
+- **Weather in the calendar:** each day's weather picture sits in its month cell, and the day headings show the high and low. It reads the forecast Kinetik Weather has saved, so nothing extra is fetched (Settings → Agenda → Weather).
+- **Event colours and categories:** an event's own `COLOR` is used, and each category (Outlook's colour categories, or `CATEGORIES` in an .ics) can be given a colour of its own (Settings → Categories).
+- **Calendar files:** *Add .ics file…* on the Calendars page adds a file on your PC, read again on every sync.
+- **Next event for other apps:** the next timed event is saved to `%LOCALAPPDATA%\KinetikCalendar\nextevent.tsv` (UTC start and end ticks, title, location, calendar), for a countdown elsewhere.
+
 ## What's new in 2.0
 
 Part of the Kinetik apps, with [Kinetik Stats](https://github.com/WastedDesigner/Kinetik) (the taskbar monitor, called just Kinetik until its v4.0), [Kinetik Hub](https://github.com/WastedDesigner/KinetikHub) and the other desktop widgets.

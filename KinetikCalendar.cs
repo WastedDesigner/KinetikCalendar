@@ -24,11 +24,11 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Kinetik Calendar")]
 [assembly: AssemblyProduct("Kinetik Calendar")]
 [assembly: AssemblyCopyright("Copyright © 2026 Akila Sella Hennedige")]
-[assembly: AssemblyVersion("2.0.1.0")]
+[assembly: AssemblyVersion("2.1.0.0")]
 
 static class Program
 {
-    public const string Version = "2.0.1";
+    public const string Version = "2.1.0";
     public static bool Demo; // --demo: made-up calendars, nothing read from or saved to this PC
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
 
@@ -142,12 +142,12 @@ class Feed
 class Settings
 {
     const string KeyPath = @"Software\KinetikCalendar";
-    public int X = int.MinValue, Y = int.MinValue, Width = 320, Scale = 100, Opacity = CommonMenu.DefaultOpacity, Round = 100, Days = 7, Layer = 0, SyncMin = 15, MaxHeight = 0; // MaxHeight 0 = as tall as the screen allows
+    public int X = int.MinValue, Y = int.MinValue, Width = 320, Scale = 100, Opacity = CommonMenu.DefaultOpacity, Round = 100, Days = 7, Layer = 0, SyncMin = 15, MaxHeight = 0, RemindMin = 10; // MaxHeight 0 = as tall as the screen allows
     public bool Locked, Snap = true, Shadow = true, Border = true, ClickThrough, Animate = true, ClickOpens = true;
-    public string ThemeName = "Midnight", FontName = "";
+    public string ThemeName = "Midnight", FontName = "", CategoryColors = ""; // CategoryColors: "name=ARGB;name=ARGB", see Cats
     public int Accent, BgColor; // ARGB; 0 means the theme's own
     public int Density = 1, Marker = 0, MonthStyle = 0, FirstDay = -1, TitleStyle = 0, MaxPerDay = 0;
-    public bool MergeDupes = true, WeekNumbers, ShadeWeekends = true, ShowDetails = true, ShowLocation = true, ShowPast = true, ShowAllDay = true, ShowEmptyDays, Countdown = true, ProgressBars = true;
+    public bool MergeDupes = true, WeekNumbers, ShadeWeekends = true, ShowDetails = true, ShowLocation = true, ShowPast = true, ShowAllDay = true, ShowEmptyDays, Countdown = true, ProgressBars = true, ShowWeather = true;
     public bool Use24h = CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern.Contains("H");
     public List<Feed> Feeds = new List<Feed>();
     public int Rev { get; set; } // bumped on every change, so the widget knows to redraw
@@ -465,9 +465,29 @@ static class Net
         return url;
     }
 
+    // A calendar can also be a file on this PC (an .ics someone sent you): it's read again on every sync, so edits show up.
+    public static string LocalPath(string url)
+    {
+        url = (url ?? "").Trim();
+        if (url.StartsWith("file:///", StringComparison.OrdinalIgnoreCase)) { try { return new Uri(url).LocalPath; } catch { return null; } }
+        return url.Length > 2 && (url[1] == ':' || url.StartsWith(@"\\")) ? url : null;
+    }
+
+    static string ReadLocal(string path)
+    {
+        var info = new FileInfo(path);
+        if (!info.Exists) throw new IOException("The file isn't there any more: " + path);
+        if (info.Length > 16 * 1024 * 1024) throw new IOException("Calendar file exceeds 16 MB.");
+        var text = File.ReadAllText(path, Encoding.UTF8);
+        if (text.IndexOf("BEGIN:VCALENDAR", StringComparison.OrdinalIgnoreCase) < 0) throw new Exception("That file isn't a calendar");
+        return text;
+    }
+
     // Returns null when the server says the calendar hasn't changed (304).
     static string Get(string url, ref string etag, ref string modified)
     {
+        var local = LocalPath(url);
+        if (local != null) return ReadLocal(local);
         var req = (HttpWebRequest)WebRequest.Create(Normalise(url));
         req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KinetikCalendar/" + Program.Version;
         req.Timeout = 30000; req.ReadWriteTimeout = 30000;
@@ -583,6 +603,8 @@ class CalEvent
     public bool AllDay;
     public Feed Feed;
     public List<Color> Also; // the same event in other calendars
+    public string Category;  // the first of its CATEGORIES
+    public Color? Own;       // its own colour: the COLOR property, else the colour chosen for its category (see Cats)
 }
 
 // Enough of RFC 5545 for real-world Google, Outlook and iCloud feeds: time zones, all-day events, RRULE
@@ -593,7 +615,7 @@ static class Ics
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     // Only these are kept. Descriptions, attendees and the like are the bulk of a feed and the widget never shows them.
-    static readonly HashSet<string> Wanted = new HashSet<string> { "DTSTART", "DTEND", "DURATION", "RRULE", "EXDATE", "RECURRENCE-ID", "UID", "SUMMARY", "LOCATION", "STATUS" };
+    static readonly HashSet<string> Wanted = new HashSet<string> { "DTSTART", "DTEND", "DURATION", "RRULE", "EXDATE", "RECURRENCE-ID", "UID", "SUMMARY", "LOCATION", "STATUS", "CATEGORIES", "COLOR" };
 
     public class Prop
     {
@@ -867,6 +889,12 @@ static class Ics
         var loc = e.Text("LOCATION");
         if (!string.IsNullOrWhiteSpace(loc)) loc = Regex.Replace(loc, @"\s*\n\s*", ", "); else loc = null;
 
+        string category = null; Color? own = null;
+        var cat = e.Get("CATEGORIES");
+        if (cat != null) { category = Unescape(Regex.Split(cat.Value, @"(?<!\\),")[0]); if (category == "") category = null; }
+        var col = e.Get("COLOR");
+        if (col != null) { try { own = Color.FromArgb(255, ColorTranslator.FromHtml(col.Value.Trim())); } catch { } }
+
         var skip = new HashSet<DateTime>();
         if (recurring)
         {
@@ -885,7 +913,7 @@ static class Ics
             if (recurring && skip.Contains(start)) continue;
             var end = start + len;
             if (end > from || (len == TimeSpan.Zero && start >= from))
-                result.Add(new CalEvent { Title = title, Location = loc, Start = start, End = end, AllDay = st.DateOnly, Feed = feed });
+                result.Add(new CalEvent { Title = title, Location = loc, Start = start, End = end, AllDay = st.DateOnly, Feed = feed, Category = category, Own = own });
         }
     }
 
@@ -1303,6 +1331,204 @@ class DarkMenu : ToolStripProfessionalRenderer
     }
 }
 
+// ======================================================================= Event colours, reminders, next event, weather
+// An event's colour: its own (COLOR property or category colour), else its calendar's.
+static class Hue
+{
+    public static Color Of(CalEvent e) { return e.Own ?? e.Feed.Color; }
+}
+
+// Colours chosen for event categories, kept in Settings.CategoryColors as "name=ARGB;name=ARGB".
+static class Cats
+{
+    public static Dictionary<string, Color> Parse(string s)
+    {
+        var map = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in (s ?? "").Split(';'))
+        {
+            int eq = part.LastIndexOf('='), argb;
+            if (eq > 0 && int.TryParse(part.Substring(eq + 1), out argb)) map[part.Substring(0, eq)] = Color.FromArgb(255, Color.FromArgb(argb));
+        }
+        return map;
+    }
+
+    public static string Join(Dictionary<string, Color> map)
+    {
+        return string.Join(";", map.Select(p => p.Key.Replace(";", " ").Replace("=", " ") + "=" + p.Value.ToArgb()));
+    }
+}
+
+// Which timed events to announce: those starting within `lead` minutes that haven't been announced yet.
+// `seen` remembers them until a day after they start, so a restart or a sync never announces one twice.
+static class Reminders
+{
+    public static List<CalEvent> Due(IEnumerable<CalEvent> events, DateTime now, int lead, Dictionary<string, DateTime> seen)
+    {
+        var due = new List<CalEvent>();
+        if (lead <= 0) return due;
+        foreach (var k in seen.Where(p => p.Value < now.AddDays(-1)).Select(p => p.Key).ToList()) seen.Remove(k);
+        foreach (var e in events.Where(e => !e.AllDay && e.Start > now && e.Start <= now.AddMinutes(lead)).OrderBy(e => e.Start))
+        {
+            var key = e.Feed.Name + "\u0001" + e.Title + "\u0001" + e.Start.Ticks;
+            if (seen.ContainsKey(key)) continue;
+            seen[key] = e.Start; due.Add(e);
+        }
+        return due;
+    }
+
+    // The notification's title and text for one or more events.
+    public static string[] Message(List<CalEvent> due, DateTime now)
+    {
+        Func<CalEvent, string> when = e => "in " + Math.Max(1, (int)Math.Ceiling((e.Start - now).TotalMinutes)) + " min";
+        if (due.Count == 1) return new[] { due[0].Title, "Starts " + when(due[0]) + (due[0].Location != null ? "  ·  " + due[0].Location : "") };
+        return new[] { due.Count + " events starting soon", string.Join("\n", due.Take(3).Select(e => e.Title + ", " + when(e))) + (due.Count > 3 ? "\n+" + (due.Count - 3) + " more" : "") };
+    }
+}
+
+// The next timed event, for other Kinetik apps (Kinetik Clock can show a countdown to it): %LOCALAPPDATA%\KinetikCalendar\nextevent.tsv,
+// one line of UTC start ticks, UTC end ticks, title, location and calendar name, tab-separated; empty when nothing is coming up.
+static class NextEvent
+{
+    static string last;
+
+    public static CalEvent Pick(IEnumerable<CalEvent> events, DateTime now)
+    {
+        return events.Where(e => !e.AllDay && e.Start > now).OrderBy(e => e.Start).FirstOrDefault();
+    }
+
+    static string Tsv(string v) { return (v ?? "").Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' '); }
+
+    public static string Line(CalEvent e)
+    {
+        return e == null ? "" : e.Start.ToUniversalTime().Ticks + "\t" + e.End.ToUniversalTime().Ticks + "\t" + Tsv(e.Title) + "\t" + Tsv(e.Location) + "\t" + Tsv(e.Feed.Name);
+    }
+
+    public static void Write(IEnumerable<CalEvent> events)
+    {
+        if (Program.Demo) return;
+        var line = Line(Pick(events, DateTime.Now));
+        if (line == last) return; // only touch the disk when it changes
+        try
+        {
+            Directory.CreateDirectory(Net.Dir);
+            var file = Path.Combine(Net.Dir, "nextevent.tsv"); var tmp = file + ".tmp";
+            File.WriteAllText(tmp, line == "" ? "" : line + "\r\n", new UTF8Encoding(false));
+            if (File.Exists(file)) File.Replace(tmp, file, null); else File.Move(tmp, file);
+            last = line;
+        }
+        catch { }
+    }
+}
+
+// The daily forecast Kinetik Weather saved for its main place (%LOCALAPPDATA%\KinetikWeather\forecast.json, Open-Meteo's own JSON).
+// Nothing is fetched here: no forecast file, no weather.
+static class Wx
+{
+    public class Day { public int Code; public double Max, Min; }
+
+    static Dictionary<DateTime, Day> days = new Dictionary<DateTime, Day>();
+    static DateTime stamp, checkedAt;
+    static string Source { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KinetikWeather", "forecast.json"); } }
+
+    public static Day For(DateTime day)
+    {
+        if (Program.Demo) return Fake(day);
+        if ((DateTime.UtcNow - checkedAt).TotalSeconds > 60) { checkedAt = DateTime.UtcNow; Load(); } // the file is looked at once a minute
+        Day d;
+        return days.TryGetValue(day.Date, out d) ? d : null;
+    }
+
+    static void Load()
+    {
+        try
+        {
+            var info = new FileInfo(Source);
+            if (!info.Exists) { days = new Dictionary<DateTime, Day>(); stamp = DateTime.MinValue; return; }
+            if (info.LastWriteTimeUtc == stamp) return;
+            days = Parse(File.ReadAllText(Source));
+            stamp = info.LastWriteTimeUtc;
+        }
+        catch { }
+    }
+
+    public static Dictionary<DateTime, Day> Parse(string json)
+    {
+        var res = new Dictionary<DateTime, Day>();
+        int brace = json.IndexOf('{'); // Kinetik Weather puts the place ("lat,lon") on a first line before the JSON
+        if (brace < 0) return res;
+        using (var doc = System.Text.Json.JsonDocument.Parse(json.Substring(brace)))
+        {
+            var d = doc.RootElement.GetProperty("daily");
+            var time = d.GetProperty("time"); var code = d.GetProperty("weather_code"); var hi = d.GetProperty("temperature_2m_max"); var lo = d.GetProperty("temperature_2m_min");
+            for (int i = 0; i < time.GetArrayLength() && i < code.GetArrayLength() && i < hi.GetArrayLength() && i < lo.GetArrayLength(); i++)
+            {
+                DateTime t;
+                if (!DateTime.TryParse(time[i].GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out t)) continue;
+                if (code[i].ValueKind != System.Text.Json.JsonValueKind.Number || hi[i].ValueKind != System.Text.Json.JsonValueKind.Number || lo[i].ValueKind != System.Text.Json.JsonValueKind.Number) continue;
+                res[t.Date] = new Day { Code = code[i].GetInt32(), Max = hi[i].GetDouble(), Min = lo[i].GetDouble() };
+            }
+        }
+        return res;
+    }
+
+    // Made-up weather for --demo, around today.
+    static Day Fake(DateTime day)
+    {
+        int n = (int)(day.Date - DateTime.Today).TotalDays;
+        if (n < 0 || n > 7) return null;
+        var codes = new[] { 2, 0, 1, 61, 3, 80, 95, 0 };
+        return new Day { Code = codes[n], Max = 21 + (n * 3) % 7, Min = 11 + (n * 2) % 5 };
+    }
+
+    public static string Text(Day d) { return Math.Round(d.Max) + "°/" + Math.Round(d.Min) + "°"; }
+
+    // A small picture for a WMO weather code, drawn in a square. `a` is the opacity (0-255).
+    public static void Icon(Graphics g, int code, RectangleF r, int a)
+    {
+        float s = r.Width, x = r.X, y = r.Y;
+        bool clear = code == 0, part = code == 1 || code == 2, fog = code == 45 || code == 48, storm = code >= 95;
+        bool snow = (code >= 71 && code <= 77) || code == 85 || code == 86, wet = (code >= 51 && code <= 67) || (code >= 80 && code <= 82);
+        var sun = Color.FromArgb(a, 255, 190, 60); var cloud = Color.FromArgb(a, 190, 200, 214); var rain = Color.FromArgb(a, 90, 170, 255);
+        var mode = g.SmoothingMode; g.SmoothingMode = SmoothingMode.AntiAlias;
+        using (var sunBrush = new SolidBrush(sun))
+        using (var pen = new Pen(sun, Math.Max(1f, s / 10f)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+        {
+            if (clear)
+            {
+                g.FillEllipse(sunBrush, x + s * 0.24f, y + s * 0.24f, s * 0.52f, s * 0.52f);
+                for (int i = 0; i < 8; i++)
+                {
+                    double ang = i * Math.PI / 4; float cx = x + s / 2, cy = y + s / 2, c = (float)Math.Cos(ang), n = (float)Math.Sin(ang);
+                    g.DrawLine(pen, cx + c * s * 0.40f, cy + n * s * 0.40f, cx + c * s * 0.50f, cy + n * s * 0.50f);
+                }
+            }
+            else if (part) g.FillEllipse(sunBrush, x + s * 0.04f, y + s * 0.0f, s * 0.5f, s * 0.5f);
+            if (fog)
+                using (var fp = new Pen(cloud, Math.Max(1f, s / 10f)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    for (int i = 0; i < 3; i++) g.DrawLine(fp, x + s * (0.15f + 0.1f * (i % 2)), y + s * (0.28f + 0.22f * i), x + s * (0.85f - 0.1f * ((i + 1) % 2)), y + s * (0.28f + 0.22f * i));
+            if (!clear && !fog)
+            {
+                float dy = wet || snow || storm ? -0.1f * s : 0;
+                using (var cb = new SolidBrush(cloud))
+                {
+                    g.FillEllipse(cb, x + s * 0.10f, y + s * 0.42f + dy, s * 0.36f, s * 0.32f);
+                    g.FillEllipse(cb, x + s * 0.28f, y + s * 0.22f + dy, s * 0.42f, s * 0.42f);
+                    g.FillEllipse(cb, x + s * 0.54f, y + s * 0.40f + dy, s * 0.36f, s * 0.32f);
+                    g.FillRectangle(cb, x + s * 0.28f, y + s * 0.46f + dy, s * 0.46f, s * 0.26f);
+                }
+                if (wet)
+                    using (var rp = new Pen(rain, Math.Max(1f, s / 11f)) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                        for (int i = 0; i < 3; i++) g.DrawLine(rp, x + s * (0.30f + 0.2f * i), y + s * 0.74f, x + s * (0.26f + 0.2f * i), y + s * 0.94f);
+                if (snow)
+                    using (var wb = new SolidBrush(Color.FromArgb(a, 235, 240, 250)))
+                        for (int i = 0; i < 3; i++) g.FillEllipse(wb, x + s * (0.26f + 0.2f * i), y + s * (0.76f + 0.08f * (i % 2)), s * 0.12f, s * 0.12f);
+                if (storm) g.FillPolygon(sunBrush, new[] { new PointF(x + s * 0.54f, y + s * 0.58f), new PointF(x + s * 0.38f, y + s * 0.84f), new PointF(x + s * 0.50f, y + s * 0.84f), new PointF(x + s * 0.44f, y + s * 1.0f), new PointF(x + s * 0.66f, y + s * 0.72f), new PointF(x + s * 0.54f, y + s * 0.72f) });
+            }
+        }
+        g.SmoothingMode = mode;
+    }
+}
+
 // ======================================================================= App
 class CalApp : ApplicationContext
 {
@@ -1316,6 +1542,8 @@ class CalApp : ApplicationContext
     readonly System.Windows.Forms.Timer minute = new System.Windows.Forms.Timer();
     readonly System.Windows.Forms.Timer saveTimer = new System.Windows.Forms.Timer { Interval = 600 };
     SettingsForm settingsForm;
+    readonly Dictionary<string, DateTime> reminded = new Dictionary<string, DateTime>(); // announced events, see Reminders
+    public readonly SortedSet<string> Categories = new SortedSet<string>(StringComparer.OrdinalIgnoreCase); // categories seen in the events on show
     int busy;
     bool locked;
     DateTime shownDay = DateTime.Today;
@@ -1398,6 +1626,19 @@ class CalApp : ApplicationContext
         if (DateTime.Today != shownDay) { shownDay = DateTime.Today; Widget.P.Selected = null; Widget.P.ViewOffset = 0; Rebuild(); Sync(); }
         else Widget.Render(false);
         Widget.Shimmer();
+        CheckReminders();
+        NextEvent.Write(Widget.P.Events);
+    }
+
+    // A notification shortly before a timed event starts (Settings → Behaviour → Remind me).
+    void CheckReminders()
+    {
+        if (Program.Demo || Cfg.RemindMin <= 0) return;
+        var now = DateTime.Now;
+        var due = Reminders.Due(Widget.P.Events, now, Cfg.RemindMin, reminded);
+        if (due.Count == 0) return;
+        var m = Reminders.Message(due, now);
+        tray.ShowBalloonTip(10000, m[0], m[1], ToolTipIcon.None);
     }
 
     void ScheduleSync(int ms)
@@ -1454,6 +1695,14 @@ class CalApp : ApplicationContext
             var p = f.Parsed;
             if (f.On && p != null) all.AddRange(Ics.Expand(p, f, from, to));
         }
+        var catColors = Cats.Parse(Cfg.CategoryColors);
+        foreach (var e in all)
+            if (e.Category != null)
+            {
+                Categories.Add(e.Category);
+                Color chosen;
+                if (e.Own == null && catColors.TryGetValue(e.Category, out chosen)) e.Own = chosen;
+            }
         if (Cfg.MergeDupes) // an event you're invited to from two calendars shows once, marked in both colours
         {
             var seen = new Dictionary<string, CalEvent>();
@@ -1463,14 +1712,15 @@ class CalApp : ApplicationContext
                 var key = e.Title + "\u0001" + e.Start.Ticks + "\u0001" + e.End.Ticks;
                 CalEvent first;
                 if (!seen.TryGetValue(key, out first)) { seen[key] = e; merged.Add(e); continue; }
-                if (first.Feed.Color == e.Feed.Color || (first.Also != null && first.Also.Contains(e.Feed.Color))) continue;
+                if (Hue.Of(first) == Hue.Of(e) || (first.Also != null && first.Also.Contains(Hue.Of(e)))) continue;
                 if (first.Also == null) first.Also = new List<Color>(2);
-                first.Also.Add(e.Feed.Color);
+                first.Also.Add(Hue.Of(e));
             }
             all = merged;
         }
         Cfg.Rev++;
         Widget.SetEvents(all);
+        NextEvent.Write(all);
         if (settingsForm != null && !settingsForm.IsDisposed) settingsForm.PreviewChanged();
     }
 
@@ -1655,7 +1905,7 @@ class Painter : IDisposable
             {
                 List<Color> cols;
                 if (!dc.TryGetValue(d, out cols)) dc[d] = cols = new List<Color>(3);
-                if (!cols.Contains(e.Feed.Color)) cols.Add(e.Feed.Color);
+                if (!cols.Contains(Hue.Of(e))) cols.Add(Hue.Of(e));
                 if (e.Also != null) foreach (var a in e.Also) if (!cols.Contains(a)) cols.Add(a);
             }
         }
@@ -1994,8 +2244,21 @@ class Painter : IDisposable
                     var ssz = g.MeasureString(it.Sub, fSmall, PointF.Empty, Typo);
                     brush.Color = Color.FromArgb(215, Th.Sub);
                     g.DrawString(it.Sub, fSmall, brush, x1 - ssz.Width, ty + (hsz.Height - ssz.Height) / 2, Typo);
+                    float ruleEnd = x1 - ssz.Width - 8 * U;
+                    var dayWx = c.ShowWeather ? Wx.For(it.Day) : null; // "21°/11°" and its picture, left of the date
+                    if (dayWx != null)
+                    {
+                        var wt = Wx.Text(dayWx); var wsz = g.MeasureString(wt, fSmall, PointF.Empty, Typo);
+                        float tx = x1 - ssz.Width - 10 * U - wsz.Width, ix = tx - 3 * U - 12 * U;
+                        if (ix - 6 * U > x0 + hsz.Width + 8 * U)
+                        {
+                            g.DrawString(wt, fSmall, brush, tx, ty + (hsz.Height - wsz.Height) / 2, Typo);
+                            Wx.Icon(g, dayWx.Code, new RectangleF(ix, ty + (hsz.Height - 12 * U) / 2, 12 * U, 12 * U), 235);
+                            ruleEnd = ix - 6 * U;
+                        }
+                    }
                     using (var p = new Pen(Th.Line, 1)) // a hairline between the heading and the date, like a ruled diary
-                        g.DrawLine(p, x0 + hsz.Width + 8 * U, ty + hsz.Height / 2, x1 - ssz.Width - 8 * U, ty + hsz.Height / 2);
+                        g.DrawLine(p, x0 + hsz.Width + 8 * U, ty + hsz.Height / 2, ruleEnd, ty + hsz.Height / 2);
                 }
                 break;
             }
@@ -2051,7 +2314,7 @@ class Painter : IDisposable
     void DrawEvent(Graphics g, Row r, float x0, float x1, float y)
     {
         float lineH = LineH, lx;
-        var col = r.Ev.Feed.Color;
+        var col = Hue.Of(r.Ev);
         int a = r.Dim ? 100 : 255;
         var rowRect = new RectangleF(x0 - 6 * U, y - 1 * U, x1 - x0 + 12 * U, r.H - Gap + 2 * U);
         if (r.Now && c.Marker != 2)
@@ -2258,6 +2521,8 @@ class Painter : IDisposable
                 bool accentLight = Th.Accent.GetBrightness() > 0.7f;
                 brush.Color = isToday ? (accentLight ? Color.FromArgb(20, 20, 24) : Color.White) : !inMonth ? Color.FromArgb(70, Th.Sub) : day < today ? Th.Sub : Th.Text;
                 g.DrawString(day.Day.ToString(), isToday ? fDayBold : fDay, brush, new RectangleF(cx - cw / 2, cy - 9 * U, cw, 18 * U), Center);
+                var wx = c.ShowWeather && cw >= 30 * U ? Wx.For(day) : null; // the day's weather, small, in the corner of the cell
+                if (wx != null) Wx.Icon(g, wx.Code, new RectangleF(cx + cw / 2 - 12 * U, cy - 10 * U, 9 * U, 9 * U), inMonth && day >= today ? 230 : 100);
                 List<Color> cols;
                 if (!isToday && dayColors.TryGetValue(day, out cols)) // a dot for each calendar with something on
                 {
@@ -3316,7 +3581,7 @@ class SettingsForm : Form
 
     static readonly string[][] Pages =
     {
-        new[] { "Calendars", "calendar" }, new[] { "Agenda", "list" }, new[] { "Look", "palette" },
+        new[] { "Calendars", "calendar" }, new[] { "Categories", "marker" }, new[] { "Agenda", "list" }, new[] { "Look", "palette" },
         new[] { "Layout", "layout" }, new[] { "Behaviour", "gear" }, new[] { "About", "info" },
     };
 
@@ -3392,6 +3657,7 @@ class SettingsForm : Form
         switch (name)
         {
             case "Calendars": BuildCalendars(); break;
+            case "Categories": BuildCategories(); break;
             case "Agenda": BuildAgenda(); break;
             case "Look": BuildLook(); break;
             case "Layout": BuildLayout(); break;
@@ -3483,12 +3749,62 @@ class SettingsForm : Form
             card.Cursor = Cursors.Hand;
             card.Click += (s, e) => EditFeed(idx);
         }
-        Buttons(UI.Btn("+  Add calendar", (s, e) => AddFeed(), true), UI.Btn("Sync now", (s, e) => app.Sync()));
+        Buttons(UI.Btn("+  Add calendar", (s, e) => AddFeed(), true), UI.Btn("Add .ics file…", (s, e) => AddFile()), UI.Btn("Sync now", (s, e) => app.Sync()));
 
         Section("Syncing");
         var mins = new[] { 5, 10, 15, 30, 60 };
         Choice("sync", "Sync every", "Unchanged calendars are skipped", new[] { "5 minutes", "10 minutes", "15 minutes", "30 minutes", "1 hour" },
             Math.Max(0, Array.IndexOf(mins, c.SyncMin)), i => c.SyncMin = mins[i]);
+    }
+
+    // A calendar file on this PC (an invitation, a timetable): it's read again on every sync, so changes to the file show up.
+    void AddFile()
+    {
+        using (var d = new OpenFileDialog { Title = "Add a calendar file", Filter = "Calendar files (*.ics)|*.ics|All files|*.*" })
+        {
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            try
+            {
+                var info = new FileInfo(d.FileName);
+                if (info.Length > 16 * 1024 * 1024) throw new IOException("that file is too large to be a calendar");
+                var text = File.ReadAllText(d.FileName, Encoding.UTF8);
+                if (text.IndexOf("BEGIN:VCALENDAR", StringComparison.OrdinalIgnoreCase) < 0) throw new IOException("it isn't a calendar file");
+                c.Feeds.Add(new Feed { Name = Ics.CalName(text) ?? Path.GetFileNameWithoutExtension(d.FileName), Url = d.FileName, Kind = "Other", Color = Feed.Palette[c.Feeds.Count % Feed.Palette.Length] });
+                c.Save(); Changed(true); ShowPage("Calendars"); app.Sync();
+            }
+            catch (Exception ex) { MessageBox.Show(this, "Couldn't add that file: " + ex.Message, "Add a calendar file", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        }
+    }
+
+    // ---- Categories
+    static readonly string[] ColourNames = { "Blue", "Teal", "Red", "Violet", "Orange", "Green", "Pink", "Sky", "Yellow", "Coral", "Indigo", "Grey" }; // in Feed.Palette's order
+
+    void BuildCategories()
+    {
+        Desc("Events can carry a category: Outlook's colour categories, or CATEGORIES in an .ics file. Give a category a colour and its events use it in the agenda and the month instead of their calendar's. An event's own COLOR is always kept.");
+        var map = Cats.Parse(c.CategoryColors);
+        var names = app.Categories.Concat(map.Keys).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        if (names.Count == 0) { Row("list", "No categories yet", "None of the events on show has a category.", null); return; }
+        Section("Categories");
+        var items = new[] { "Calendar colour" }.Concat(ColourNames).ToArray();
+        foreach (var name in names)
+        {
+            var n = name;
+            Color chosen;
+            int sel = map.TryGetValue(n, out chosen) ? Math.Max(0, Array.FindIndex(Feed.Palette, p => p.ToArgb() == chosen.ToArgb()) + 1) : 0;
+            var cb = new DarkCombo(items, sel);
+            var card = Row(null, n, "Events in this category", cb);
+            if (sel > 0) card.Swatch = Feed.Palette[sel - 1];
+            cb.SelectedIndexChanged += (s, e) =>
+            {
+                var m = Cats.Parse(c.CategoryColors);
+                if (cb.SelectedIndex == 0) m.Remove(n); else m[n] = Feed.Palette[cb.SelectedIndex - 1];
+                c.CategoryColors = Cats.Join(m);
+                card.Swatch = cb.SelectedIndex > 0 ? Feed.Palette[cb.SelectedIndex - 1] : (Color?)null;
+                card.Invalidate();
+                Changed(true);
+            };
+        }
     }
 
     void AddFeed()
@@ -3541,6 +3857,7 @@ class SettingsForm : Form
         Switch("text", "Times and durations", "Time range, or how long is left", c.ShowDetails, v => c.ShowDetails = v);
         Switch("pointer", "Locations", "Added to the second line", c.ShowLocation, v => c.ShowLocation = v);
         Switch("bolt", "Countdown", "\"in 25 min\" within the hour", c.Countdown, v => c.Countdown = v);
+        Switch("drop", "Weather", "Each day's weather in the month and the day headings, from Kinetik Weather's saved forecast", c.ShowWeather, v => c.ShowWeather = v);
         Switch("width", "Progress bars", "A bar under events happening now", c.ProgressBars, v => c.ProgressBars = v);
         Switch("clock", "24-hour time", null, c.Use24h, v => c.Use24h = v);
     }
@@ -3647,6 +3964,10 @@ class SettingsForm : Form
         Switch("magnet", "Snap to screen edges", null, c.Snap, v => c.Snap = v);
         var reset = UI.Btn("Reset position", (s, e) => { c.X = c.Y = int.MinValue; Changed(false); });
         Row("width", "Position", "Moves it back to the top-right corner", reset);
+        Section("Reminders");
+        var leads = new[] { 0, 5, 10, 15, 30, 60 };
+        Choice("bolt", "Remind me", "A notification this long before a timed event starts", new[] { "Off", "5 minutes before", "10 minutes before", "15 minutes before", "30 minutes before", "1 hour before" },
+            Math.Max(0, Array.IndexOf(leads, c.RemindMin)), i => c.RemindMin = leads[i]);
         Section("Interaction");
         Switch("pointer", "Click an event to open it", "In Google Calendar, Outlook or iCloud on the web", c.ClickOpens, v => c.ClickOpens = v);
         Switch("bolt", "Animations", "Fade-in, hover, resizing, scrolling, sync spinner", c.Animate, v => c.Animate = v);
