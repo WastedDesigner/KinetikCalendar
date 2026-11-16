@@ -13,7 +13,7 @@ There's no sign-in and no API key. Each calendar is read from its private iCal (
 
 > **About this project:** I made this for my own desktop and decided to share it in case anyone else finds it useful. If you run into a bug or have an idea for a feature, please [open an issue](../../issues).
 
-**Latest version: v2.0.0.** [Download it from Releases](../../releases/latest).
+**Latest version: v2.1.0.** [Download it from Releases](../../releases/latest).
 
 ## Contents
 
