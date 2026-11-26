@@ -57,14 +57,14 @@ with tempfile.TemporaryDirectory(prefix='kinetik-tests-') as directory:
     generated = temp / 'AppAlgorithms.cs'; generated.write_text('\n'.join(modules))
     core = tests / 'SuiteCoreTests.cs'
     support = app / 'SuiteSupport.cs'
-    # Run the real algorithms on the same .NET 8 runtime as the application.
+    # Run the real algorithms on the same .NET 10 runtime as the application.
     shutil.copy2(support, temp / 'SuiteSupport.cs')
     shutil.copy2(core, temp / 'SuiteCoreTests.cs')
     project = temp / 'SuiteTests.csproj'
     project.write_text('''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <DefineConstants>SUITE_CORE_TEST</DefineConstants>
     <NoWarn>0649;CA1416;SYSLIB0014</NoWarn>
   </PropertyGroup>

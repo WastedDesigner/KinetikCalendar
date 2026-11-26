@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-rem Builds a single executable with the .NET 8 SDK; requires the .NET 8 Desktop Runtime to run.
+rem Builds a single executable with the .NET 10 SDK; requires the .NET 10 Desktop Runtime to run.
 rem "build.bat package" also makes KinetikCalendar.zip (the exe, README and licence) for a release.
 if not exist icon.ico powershell -NoProfile -ExecutionPolicy Bypass -File make-icon.ps1 || exit /b 1
 set OUT=%LOCALAPPDATA%\Kinetik\Build\publish-KinetikCalendar

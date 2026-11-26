@@ -1,5 +1,9 @@
 # Release notes
 
+## v2.2.0
+
+Now on .NET 10 (LTS). Needs the free .NET 10 Desktop Runtime (x64); settings and data carry over.
+
 ## v2.0.0
 
 The Kinetik apps' new look.
